@@ -68,7 +68,7 @@ Cada endpoint deve ainda conter um exemplo completo de requisição HTTP, inclui
 
 ## 5. Fluxo de Integração com IA
 
-Descreva em detalhes o fluxo completo que ocorre internamente na API quando uma pergunta é recebida via `POST /bot/perguntar`. O objetivo é deixar claro como a API orquestra a busca de conteúdo e a geração de resposta. Preencha cada etapa do diagrama abaixo com os detalhes técnicos da implementação, como algoritmo de busca, modelo de IA utilizado, número de artigos recuperados e tamanho do contexto enviado à IA.
+&ensp; Esta seção descreve o caminho percorrido desde o momento em que o produtor envia uma pergunta pelo WhatsApp até o momento em que recebe uma resposta. O objetivo é deixar claro como as diferentes partes do sistema trabalham juntas para entregar uma resposta útil e baseada em conteúdo técnico confiável.
 
 ### 5.1 Diagrama de Sequência
 ```mermaid
