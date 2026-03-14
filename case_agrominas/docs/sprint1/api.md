@@ -71,42 +71,18 @@ Cada endpoint deve ainda conter um exemplo completo de requisição HTTP, inclui
 Descreva em detalhes o fluxo completo que ocorre internamente na API quando uma pergunta é recebida via `POST /bot/perguntar`. O objetivo é deixar claro como a API orquestra a busca de conteúdo e a geração de resposta. Preencha cada etapa do diagrama abaixo com os detalhes técnicos da implementação, como algoritmo de busca, modelo de IA utilizado, número de artigos recuperados e tamanho do contexto enviado à IA.
 
 ### 5.1 Diagrama de Sequência
+```mermaid
+flowchart LR
 
-```
-Produtor (WhatsApp)
-      │
-      ▼
-[1] Bot recebe mensagem
-      │
-      ▼
-[2] POST /api/v1/bot/perguntar
-      │
-      ▼
-[3] API — Pré-processamento da pergunta
-    └─ [Descrever: normalização, extração de intenção, identificação de cultura/insumo, etc.]
-      │
-      ▼
-[4] API — Busca de Artigos Relevantes no Banco de Dados
-    └─ [Descrever: algoritmo de busca utilizado — ex: busca por palavras-chave,
-        similaridade semântica/embeddings, filtros por categoria ou cultura]
-      │
-      ▼
-[5] API — Montagem do Contexto para a IA
-    └─ [Descrever: como os artigos recuperados são formatados e combinados com a
-        pergunta original para compor o prompt enviado ao modelo de IA]
-      │
-      ▼
-[6] Chamada ao Modelo de IA
-    └─ [Descrever: modelo utilizado, parâmetros da chamada, timeout,
-        tratamento de falhas na chamada à IA]
-      │
-      ▼
-[7] API — Pós-processamento da Resposta
-    └─ [Descrever: formatação da resposta para o formato do WhatsApp,
-        inclusão de referências dos artigos, truncamento se necessário]
-      │
-      ▼
-[8] Retorno ao Bot → Produtor recebe resposta
+A["1. Produtor"] --> B["2. Bot"]
+B --> C["3. Interpretar pergunta"]
+C --> D["4. Buscar artigos"]
+
+D --> E["5. Montar contexto"]
+E --> F["6. Modelo IA"]
+F --> G["7. Formatar resposta"]
+
+G --> H["8. Resposta no WhatsApp"]
 ```
 
 ### 5.2 Detalhamento de Cada Etapa
