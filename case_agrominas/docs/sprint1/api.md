@@ -87,49 +87,59 @@ G --> H["8. Resposta no WhatsApp"]
 
 ### 5.2 Detalhamento de Cada Etapa
 
-Para cada etapa numerada no diagrama acima, descreva com precisão técnica: quais bibliotecas ou serviços externos são acionados, quais dados transitam entre as etapas, as decisões de implementação tomadas e o tratamento de exceções previsto.
+#### Etapa 1: Produtor envia uma pergunta
 
-**Etapa 1 — [Nome da etapa]**  
-Descrição técnica: `[preencher]`  
-Serviço / Biblioteca utilizada: `[preencher]`  
-Tratamento de erro: `[preencher]`
+&ensp; O produtor rural envia uma mensagem de texto pelo WhatsApp com uma dúvida sobre insumos, manejo do solo ou práticas agrícolas. Não é necessário seguir nenhum formato especial, a pergunta pode ser escrita de forma natural, como em uma conversa.
 
-**Etapa 2 — [Nome da etapa]**  
-Descrição técnica: `[preencher]`  
-Serviço / Biblioteca utilizada: `[preencher]`  
-Tratamento de erro: `[preencher]`
+**Exemplo:** *"Que tipo de calcário devo usar para corrigir o pH do solo na minha lavoura de milho?"*
 
-**Etapa 3 — [Nome da etapa]**  
-Descrição técnica: `[preencher]`  
-Serviço / Biblioteca utilizada: `[preencher]`  
-Tratamento de erro: `[preencher]`
+&ensp; Comportamento esperado em caso de problema: Caso a mensagem enviada não seja um texto (por exemplo, um áudio ou imagem), o bot informa ao produtor que, neste momento, apenas mensagens de texto são aceitas.
 
-**Etapa 4 — [Nome da etapa]**  
-Descrição técnica: `[preencher]`  
-Serviço / Biblioteca utilizada: `[preencher]`  
-Tratamento de erro: `[preencher]`
+#### Etapa 2: Bot encaminha a pergunta para a API
 
-**Etapa 5 — [Nome da etapa]**  
-Descrição técnica: `[preencher]`  
-Serviço / Biblioteca utilizada: `[preencher]`  
-Tratamento de erro: `[preencher]`
+&ensp; O bot recebe a mensagem do produtor e a repassa automaticamente para a API, junto com um identificador da conversa. 
+&ensp; Comportamento esperado em caso de problema: Se a API não estiver disponível no momento, o bot informa ao produtor que está com uma instabilidade temporária e pede que tente novamente em breve.
 
-**Etapa 6 — [Nome da etapa]**  
-Descrição técnica: `[preencher]`  
-Serviço / Biblioteca utilizada: `[preencher]`  
-Tratamento de erro: `[preencher]`
+#### Etapa 3: API interpreta a pergunta
 
-**Etapa 7 — [Nome da etapa]**  
-Descrição técnica: `[preencher]`  
-Serviço / Biblioteca utilizada: `[preencher]`  
-Tratamento de erro: `[preencher]`
+&ensp; A API analisa o texto recebido para identificar os principais assuntos mencionados pelo produtor, como o nome de uma cultura agrícola (soja, café, pastagem) ou um tipo de insumo (inoculante, húmus, calcário). Essa identificação orienta a busca que será feita na biblioteca de artigos na etapa seguinte. O texto original da pergunta é sempre preservado para ser usado na geração da resposta. 
 
-**Etapa 8 — [Nome da etapa]**  
-Descrição técnica: `[preencher]`  
-Serviço / Biblioteca utilizada: `[preencher]`  
-Tratamento de erro: `[preencher]`
+&ensp; Comportamento esperado em caso de problema: Se a mensagem chegar vazia ou ilegível, a API retorna um aviso de erro sem prosseguir para as etapas seguintes.
 
----
+#### Etapa 4: API busca artigos relevantes na biblioteca
+
+&ensp; Com base nos termos identificados na etapa anterior, a API consulta a biblioteca de insumos e recupera os artigos cujo conteúdo tem maior relação com a pergunta do produtor. São selecionados artigos, priorizando os que apresentam maior correspondência com o tema abordado.
+
+&ensp; Comportamento esperado em caso de problema: Se nenhum artigo relevante for encontrado, o fluxo continua e a IA é informada de que não há conteúdo disponível sobre o tema, gerando uma resposta que orienta o produtor a buscar apoio diretamente com a equipe da Agrominas.
+
+#### Etapa 5: API prepara as informações para a IA
+
+&ensp; A API organiza o conteúdo dos artigos encontrados e a pergunta original do produtor em um único bloco de informações estruturado. Esse bloco inclui uma orientação sobre o papel que a IA deve assumir,o de assistente técnico agrícola da Agrominas, e os artigos que ela deve usar como base para formular a resposta. O volume de informações é controlado para garantir que a IA consiga processá-las de forma eficiente.
+
+&ensp; Comportamento esperado em caso de problema: Se o volume de conteúdo dos artigos for muito grande, ele é reduzido automaticamente, sempre preservando as informações mais relevantes.
+
+
+#### Etapa 6: API consulta o modelo de IA
+
+&ensp; A API envia o bloco de informações preparado para um modelo de inteligência artificial, que lê o conteúdo dos artigos e a pergunta do produtor para gerar uma resposta em linguagem natural. A resposta é construída exclusivamente com base no conteúdo da biblioteca, o modelo não inventa informações nem recorre a fontes externas.
+
+&ensp; Comportamento esperado em caso de problema: Se o modelo de IA não responder dentro do tempo esperado ou retornar algum erro, a API envia ao produtor uma mensagem padrão informando que não foi possível gerar uma resposta no momento e sugerindo que entre em contato com a equipe da Agrominas.
+
+
+#### Etapa 7: API formata a resposta
+
+&ensp; O texto gerado pela IA é ajustado para funcionar bem dentro do WhatsApp. Caso a resposta seja muito longa, ela é resumida para não ultrapassar o limite adequado para uma mensagem de WhatsApp. Os artigos utilizados como referência são registrados internamente para fins de rastreabilidade, mas não são exibidos diretamente ao produtor nesta versão do MVP.
+
+&ensp; Comportamento esperado em caso de problema: Se o texto formatado vier vazio por algum motivo, a API substitui a resposta por uma mensagem padrão de indisponibilidade antes de enviá-la ao bot.
+
+
+#### Etapa 8: Produtor recebe a resposta pelo WhatsApp
+
+&ensp; O bot recebe a resposta formatada da API e a entrega ao produtor como uma mensagem de texto no WhatsApp. O fluxo é concluído e o identificador da conversa é mantido, permitindo que perguntas de acompanhamento na mesma sessão sejam rastreadas. As informações de uso, como quais artigos foram consultados e quantas conversas foram realizadas, são registradas de forma automática para alimentar os relatórios do painel administrativo.
+
+&ensp; Comportamento esperado em caso de problema: Se a entrega da mensagem ao produtor falhar por algum motivo relacionado ao WhatsApp (como número inválido ou sessão expirada), o erro é registrado internamente. O processamento realizado pela API já foi concluído com sucesso; a responsabilidade pelo reenvio é do bot.
+
+
 
 ## 6. Estrutura de Erros e Códigos HTTP
 
