@@ -1,0 +1,353 @@
+# Especificação da API Backend 
+
+## Sumário
+
+1. [Visão Geral](#1-visão-geral)
+2. [URL Base e Versionamento](#2-url-base-e-versionamento)
+3. [Autenticação e Autorização](#3-autenticação-e-autorização)
+4. [Endpoints](#4-endpoints)
+5. [Fluxo de Integração com IA](#5-fluxo-de-integração-com-ia)
+6. [Estrutura de Erros e Códigos HTTP](#6-estrutura-de-erros-e-códigos-http)
+7. [Exemplos de Uso por Contexto](#7-exemplos-de-uso-por-contexto)
+8. [Considerações de Segurança](#8-considerações-de-segurança)
+9. [Conclusão](#9-conclusão)
+
+---
+
+## 1. Visão Geral
+
+Descreva em 2 a 4 parágrafos o propósito desta API dentro do projeto. Explique qual problema ela resolve, quais são os principais sistemas que se comunicam por ela (bot do WhatsApp, painel administrativo, modelo de IA) e qual o papel central da API como "ponte" entre esses componentes. Mencione a linguagem/framework escolhido para o backend (ex: Node.js, Python Flask/Django) e o banco de dados utilizado.
+
+Cubra os seguintes pontos em sequência: o propósito da API, os sistemas integrados (bot, painel admin, IA), as tecnologias utilizadas no backend e um resumo das funcionalidades principais expostas.
+
+---
+
+## 2. URL Base e Versionamento
+
+Informe a URL base da API em cada ambiente (desenvolvimento, homologação e produção). Defina também a estratégia de versionamento adotada (ex: `/v1/` no path, header de versão, etc.) e justifique a escolha.
+
+```
+Desenvolvimento:  http://localhost:[PORT]/api/v1
+Homologação:      https://[url-de-homologacao]/api/v1
+Produção:         https://[url-de-producao]/api/v1
+```
+
+Para cada ambiente, indique também quaisquer observações relevantes, como variáveis de ambiente necessárias, restrições de acesso por rede ou configurações específicas de infraestrutura.
+
+---
+
+## 3. Autenticação e Autorização
+
+Detalhe o mecanismo de autenticação adotado para proteger os endpoints sensíveis, especialmente os do painel administrativo (operações de criação, edição e exclusão de artigos). Explique o tipo de token utilizado (ex: JWT, API Key), onde ele deve ser enviado nas requisições, o fluxo de obtenção do token (endpoint de login, validade, renovação) e o comportamento esperado em caso de token expirado ou inválido.
+
+### 3.1 Rotas Públicas vs. Protegidas
+
+Descreva quais rotas são acessíveis sem autenticação e quais exigem credenciais. Em geral, operações de leitura utilizadas pelo bot (ex: `GET /artigos`) tendem a ser públicas, enquanto operações de escrita do painel administrativo (ex: `POST`, `PUT`, `DELETE` em `/artigos`) devem ser protegidas. Liste aqui cada endpoint com seu respectivo nível de acesso, indicando também o perfil de usuário autorizado quando houver mais de um nível (ex: admin, editor).
+
+### 3.2 Formato do Token / Header de Autorização
+
+Mostre o formato exato do header de autorização que deve ser enviado nas requisições protegidas. Inclua também o endpoint e o payload necessário para obtenção do token (login) e a duração da sessão.
+
+```http
+Authorization: Bearer [token_aqui]
+```
+
+---
+
+## 4. Endpoints
+
+Esta seção deve documentar todos os endpoints da API, organizados por grupo funcional. Cada grupo deve corresponder a um recurso ou domínio da aplicação (ex: artigos, interação com o bot, autenticação). O time de desenvolvimento deve levantar quais recursos precisam ser expostos pela API e, para cada um deles, definir os endpoints necessários antes de preencher esta seção.
+
+Para cada endpoint documentado, as seguintes informações são obrigatórias: o método HTTP utilizado (`GET`, `POST`, `PUT`, `PATCH` ou `DELETE`), a rota completa a partir da URL base, o nível de autenticação exigido (público ou autenticado), a descrição do que a operação realiza, os parâmetros aceitos (de path, de query ou no body), a estrutura completa do payload de requisição em JSON quando aplicável, a estrutura completa da resposta de sucesso em JSON com todos os campos descritos, e as possíveis respostas de erro com seus respectivos códigos HTTP.
+
+Além disso, para endpoints que aceitam parâmetros de filtragem, paginação ou ordenação, cada parâmetro deve ter seu nome, tipo de dado, obrigatoriedade e valores aceitos claramente especificados. Para endpoints de escrita (criação e atualização), é necessário separar os campos obrigatórios dos opcionais e indicar as validações aplicadas a cada um (ex: tamanho máximo, formato, lista de valores permitidos). Para endpoints de exclusão, deve-se definir se a deleção é física ou lógica e descrever o comportamento esperado em ambos os cenários (sucesso e recurso não encontrado).
+
+Cada endpoint deve ainda conter um exemplo completo de requisição HTTP, incluindo headers relevantes, e um exemplo do JSON de resposta esperado.
+
+---
+
+## 5. Fluxo de Integração com IA
+
+&ensp; Esta seção descreve o caminho percorrido desde o momento em que o produtor envia uma pergunta pelo WhatsApp até o momento em que recebe uma resposta. O objetivo é deixar claro como as diferentes partes do sistema trabalham juntas para entregar uma resposta útil e baseada em conteúdo técnico confiável.
+
+### 5.1 Diagrama de Sequência
+```mermaid
+flowchart LR
+
+A["1. Produtor"] --> B["2. Bot"]
+B --> C["3. Interpretar pergunta"]
+C --> D["4. Buscar artigos"]
+
+D --> E["5. Montar contexto"]
+E --> F["6. Modelo IA"]
+F --> G["7. Formatar resposta"]
+
+G --> H["8. Resposta no WhatsApp"]
+```
+
+### 5.2 Detalhamento de Cada Etapa
+
+#### Etapa 1: Produtor envia uma pergunta
+
+&ensp; O produtor rural envia uma mensagem de texto pelo WhatsApp com uma dúvida sobre insumos, manejo do solo ou práticas agrícolas. Não é necessário seguir nenhum formato especial, a pergunta pode ser escrita de forma natural, como em uma conversa.
+
+**Exemplo:** *"Que tipo de calcário devo usar para corrigir o pH do solo na minha lavoura de milho?"*
+
+&ensp; Comportamento esperado em caso de problema: Caso a mensagem enviada não seja um texto (por exemplo, um áudio ou imagem), o bot informa ao produtor que, neste momento, apenas mensagens de texto são aceitas.
+
+#### Etapa 2: Bot encaminha a pergunta para a API
+
+&ensp; O bot recebe a mensagem do produtor e a repassa automaticamente para a API, junto com um identificador da conversa. 
+&ensp; Comportamento esperado em caso de problema: Se a API não estiver disponível no momento, o bot informa ao produtor que está com uma instabilidade temporária e pede que tente novamente em breve.
+
+#### Etapa 3: API interpreta a pergunta
+
+&ensp; A API analisa o texto recebido para identificar os principais assuntos mencionados pelo produtor, como o nome de uma cultura agrícola (soja, café, pastagem) ou um tipo de insumo (inoculante, húmus, calcário). Essa identificação orienta a busca que será feita na biblioteca de artigos na etapa seguinte. O texto original da pergunta é sempre preservado para ser usado na geração da resposta. 
+
+&ensp; Comportamento esperado em caso de problema: Se a mensagem chegar vazia ou ilegível, a API retorna um aviso de erro sem prosseguir para as etapas seguintes.
+
+#### Etapa 4: API busca artigos relevantes na biblioteca
+
+&ensp; Com base nos termos identificados na etapa anterior, a API consulta a biblioteca de insumos e recupera os artigos cujo conteúdo tem maior relação com a pergunta do produtor. São selecionados artigos, priorizando os que apresentam maior correspondência com o tema abordado.
+
+&ensp; Comportamento esperado em caso de problema: Se nenhum artigo relevante for encontrado, o fluxo continua e a IA é informada de que não há conteúdo disponível sobre o tema, gerando uma resposta que orienta o produtor a buscar apoio diretamente com a equipe da Agrominas.
+
+#### Etapa 5: API prepara as informações para a IA
+
+&ensp; A API organiza o conteúdo dos artigos encontrados e a pergunta original do produtor em um único bloco de informações estruturado. Esse bloco inclui uma orientação sobre o papel que a IA deve assumir,o de assistente técnico agrícola da Agrominas, e os artigos que ela deve usar como base para formular a resposta. O volume de informações é controlado para garantir que a IA consiga processá-las de forma eficiente.
+
+&ensp; Comportamento esperado em caso de problema: Se o volume de conteúdo dos artigos for muito grande, ele é reduzido automaticamente, sempre preservando as informações mais relevantes.
+
+
+#### Etapa 6: API consulta o modelo de IA
+
+&ensp; A API envia o bloco de informações preparado para um modelo de inteligência artificial, que lê o conteúdo dos artigos e a pergunta do produtor para gerar uma resposta em linguagem natural. A resposta é construída exclusivamente com base no conteúdo da biblioteca, o modelo não inventa informações nem recorre a fontes externas.
+
+&ensp; Comportamento esperado em caso de problema: Se o modelo de IA não responder dentro do tempo esperado ou retornar algum erro, a API envia ao produtor uma mensagem padrão informando que não foi possível gerar uma resposta no momento e sugerindo que entre em contato com a equipe da Agrominas.
+
+
+#### Etapa 7: API formata a resposta
+
+&ensp; O texto gerado pela IA é ajustado para funcionar bem dentro do WhatsApp. Caso a resposta seja muito longa, ela é resumida para não ultrapassar o limite adequado para uma mensagem de WhatsApp. Os artigos utilizados como referência são registrados internamente para fins de rastreabilidade, mas não são exibidos diretamente ao produtor nesta versão do MVP.
+
+&ensp; Comportamento esperado em caso de problema: Se o texto formatado vier vazio por algum motivo, a API substitui a resposta por uma mensagem padrão de indisponibilidade antes de enviá-la ao bot.
+
+
+#### Etapa 8: Produtor recebe a resposta pelo WhatsApp
+
+&ensp; O bot recebe a resposta formatada da API e a entrega ao produtor como uma mensagem de texto no WhatsApp. O fluxo é concluído e o identificador da conversa é mantido, permitindo que perguntas de acompanhamento na mesma sessão sejam rastreadas. As informações de uso, como quais artigos foram consultados e quantas conversas foram realizadas, são registradas de forma automática para alimentar os relatórios do painel administrativo.
+
+&ensp; Comportamento esperado em caso de problema: Se a entrega da mensagem ao produtor falhar por algum motivo relacionado ao WhatsApp (como número inválido ou sessão expirada), o erro é registrado internamente. O processamento realizado pela API já foi concluído com sucesso; a responsabilidade pelo reenvio é do bot.
+
+
+
+## 6. Estrutura de Erros e Códigos HTTP
+
+Defina o padrão de resposta de erro adotado pela API. Documente o objeto JSON padrão de erro com seus campos (ex: código interno, mensagem legível, detalhes de validação, timestamp) e descreva o cenário de uso de cada código HTTP utilizado, cobrindo erros de validação, autenticação, recurso não encontrado e falhas internas do servidor.
+
+### 6.1 Estrutura Padrão de Erro
+
+```json
+{
+  "[campo_codigo_erro]":   "[descrição: código interno do erro]",
+  "[campo_mensagem]":      "[descrição: mensagem legível para o consumidor da API]",
+  "[campo_detalhes]":      "[descrição: lista de detalhes adicionais, ex: campos com validação falha]",
+  "[campo_timestamp]":     "[descrição: data/hora do erro]"
+}
+```
+
+### 6.2 Códigos de Status HTTP Utilizados
+
+`200 OK` — `[descrever o cenário de uso]`
+
+`201 Created` — `[descrever o cenário de uso]`
+
+`204 No Content` — `[descrever o cenário de uso]`
+
+`400 Bad Request` — `[descrever o cenário de uso]`
+
+`401 Unauthorized` — `[descrever o cenário de uso]`
+
+`403 Forbidden` — `[descrever o cenário de uso]`
+
+`404 Not Found` — `[descrever o cenário de uso]`
+
+`422 Unprocessable Entity` — `[descrever o cenário de uso]`
+
+`500 Internal Server Error` — `[descrever o cenário de uso]`
+
+---
+
+## 7. Exemplos de Uso por Contexto
+&ensp; Esta seção apresenta situações reais de uso da plataforma, descrevendo como o bot e o painel administrativo interagem com a API em cada caso. Os exemplos utilizam dados fictícios, mas representativos do contexto do projeto.
+
+
+### 7.1 Cenário: Produtor consulta o bot pelo WhatsApp
+
+**Situação:** O produtor João tem uma lavoura de soja e quer reduzir o custo com adubação nitrogenada. Ele envia uma mensagem ao bot pelo WhatsApp perguntando se existe algum produto que possa ajudá-lo.
+
+
+
+**O que acontece internamente:** O bot recebe a mensagem e a encaminha para a API. A API identifica os termos "soja" e "adubo nitrogenado", busca os artigos mais relevantes na biblioteca e, com base neles, aciona o modelo de IA para compor uma resposta em linguagem acessível.
+
+**Dados enviados à API:**
+
+```json
+{
+  "pergunta": "Tenho lavoura de soja e quero gastar menos com adubo nitrogenado, tem algum produto que ajude?",
+  "sessao_id": "sess_wa_a1b2c3"
+}
+```
+
+**Resposta retornada pela API:**
+
+```json
+{
+  "resposta": "Sim! Para reduzir o uso de adubo nitrogenado na soja, o inoculante biológico é a melhor opção. Ele contém bactérias que fixam o nitrogênio do ar diretamente nas raízes da planta.Como funciona:As bactérias formam nódulos nas raízes e convertem o nitrogênio do ar em nutriente disponível para a planta. Em solos bem manejados, pode substituir até 100% da adubação nitrogenada de base. Dica de aplicação:Aplique nas sementes no dia do plantio, à sombra. Evite contato direto com fungicidas. aplique-os separadamente.",
+  "artigos_referenciados": [
+    {
+      "id": "art_09f3a",
+      "titulo": "Uso de Rhizobium na fixação biológica de nitrogênio em soja",
+      "categoria": "biofertilizante"
+    }
+  ],
+  "sessao_id": "sess_wa_a1b2c3",
+  "confianca": "alta"
+}
+```
+
+**Resultado:** O bot entrega a resposta ao produtor João diretamente no WhatsApp, formatada de forma clara e de fácil leitura pelo celular.
+
+### 7.2 Cenário: Administrador cria um novo artigo pelo painel
+
+**Situação:** A especialista técnica da Agrominas acessa o painel administrativo e deseja cadastrar um novo artigo sobre o uso de húmus de minhoca em horticultura.
+
+**O que acontece:** Preenche o formulário do painel com as informações do artigo: título, resumo, conteúdo, cultura relacionada, categoria e palavras-chave. Ao confirmar, o painel envia essas informações à API, que valida os dados e registra o novo artigo na biblioteca.
+
+**Passo 1: Autenticação no painel:**
+
+&ensp; O administrador acessa o painel com seu e-mail e senha. A API valida as credenciais e retorna um token de acesso que será usado nas operações seguintes.
+
+**Dados enviados:**
+
+```json
+{
+  "email": "tecnica@agrominas.com.br",
+  "senha": "senha123segura"
+}
+```
+
+**Resposta retornada pela API:**
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "tipo": "Bearer",
+  "expira_em": 86400,
+  "usuario": {
+    "id": "usr_04",
+    "nome": "Fernanda Oliveira",
+    "email": "tecnica@agrominas.com.br",
+    "perfil": "editor"
+  }
+}
+```
+
+**Passo 2: Criação do artigo:**
+
+&ensp; Com o acesso autenticado, o painel envia os dados do novo artigo à API.
+
+**Dados enviados:**
+
+```json
+{
+  "titulo": "Húmus de Minhoca como Fertilizante Orgânico em Horticultura",
+  "resumo": "Este artigo apresenta evidências do uso de húmus de minhoca (vermicomposto) como fertilizante orgânico em cultivos de alface, tomate e cenoura, com melhoria comprovada na estrutura do solo e no teor de matéria orgânica.",
+  "corpo": "O vermicomposto, produzido pela ação de minhocas sobre resíduos orgânicos, é um dos biofertilizantes mais ricos em nutrientes disponíveis para as plantas...",
+  "cultura": "horticultura",
+  "categoria": "organico",
+  "palavras_chave": ["húmus", "vermicomposto", "minhoca", "horticultura", "matéria orgânica"],
+  "referencias": [
+    "KIEHL, E.J. Fertilizantes Orgânicos. Agronômica Ceres, 1985.",
+    "EMBRAPA Hortaliças – Boletim de Pesquisa, 2022"
+  ]
+}
+```
+
+**Resposta da API:**
+
+```json
+{
+  "id": "art_33d8f",
+  "titulo": "Húmus de Minhoca como Fertilizante Orgânico em Horticultura",
+  "cultura": "horticultura",
+  "categoria": "organico",
+  "criado_em": "2025-10-14T16:00:00Z",
+  "mensagem": "Artigo criado com sucesso."
+}
+```
+
+**Resultado:** O artigo é cadastrado na biblioteca e passa a estar disponível para consulta pelo bot e pelo painel administrativo.
+
+
+### 7.3 Cenário: Administrador atualiza um artigo existente
+
+**Situação:** Após uma revisão técnica, o administrador identificou que o artigo sobre calcário dolomítico precisava de um resumo mais preciso e de uma nova referência bibliográfica publicada em 2025.
+
+**O que acontece:** O administrador localiza o artigo no painel, edita apenas os campos que precisam ser alterados e confirma a atualização. O painel envia à API somente os campos modificados — os demais permanecem intactos.
+
+Dados enviados:
+
+```json
+{
+  "resumo": "Análise atualizada do uso de calcário dolomítico para correção de acidez e fornecimento de cálcio e magnésio em pastagens degradadas do cerrado, com novos dados de ensaio de campo de 2025 indicando recuperação completa em 18 meses.",
+  "referencias": [
+    "SOUSA, D.M.G.; LOBATO, E. Cerrado: Correção do Solo e Adubação. Embrapa, 2004",
+    "EMBRAPA Cerrados – Relatório de Ensaios de Campo, 2025",
+    "IAC – Boletim Técnico sobre Calagem, 2023"
+  ]
+}
+```
+
+Resposta da API:
+
+```json
+{
+  "id": "art_28c1e",
+  "titulo": "Calcário Dolomítico como Corretivo de Solo em Pastagens Degradadas",
+  "atualizado_em": "2025-10-14T17:15:00Z",
+  "mensagem": "Artigo atualizado com sucesso."
+}
+```
+
+**Resultado:** O resumo e as referências do artigo são atualizados. Os demais campos — título, corpo, cultura, categoria e palavras-chave — permanecem exatamente como estavam, pois não foram incluídos na solicitação de atualização.
+
+## 8. Considerações de Segurança
+
+Descreva as medidas de segurança implementadas ou planejadas para a API. Para cada tópico abaixo, indique as decisões técnicas adotadas.
+
+**Autenticação** — `[preencher]`
+
+**Autorização por perfil** — `[preencher]`
+
+**Rate Limiting** — `[preencher — ex: limite de requisições por IP ou por token, janela de tempo, comportamento ao exceder o limite]`
+
+**Validação de inputs** — `[preencher — ex: sanitização para evitar SQL injection e XSS, bibliotecas utilizadas]`
+
+**HTTPS / TLS** — `[preencher]`
+
+**CORS** — `[preencher — origens permitidas, configuração aplicada]`
+
+**Logs e monitoramento** — `[preencher]`
+
+**Dados sensíveis** — `[preencher — ex: nenhuma informação pessoal do produtor é armazenada, política de retenção de logs]`
+
+---
+
+## 9. Conclusão
+
+Faça um fechamento do documento resumindo o que foi especificado. Retome brevemente o papel central desta API no projeto, destacando como ela conecta o bot do WhatsApp, o banco de artigos e o modelo de IA para entregar valor ao produtor rural. Indique os próximos passos esperados após a aprovação desta especificação (ex: início do desenvolvimento, revisão com o time, validação com o cliente) e registre quaisquer decisões técnicas que ainda estejam em aberto e precisam ser definidas antes ou durante a implementação.
+
+---
+
+*Documento gerado para o projeto Guia Regenerativo — AgroTech Inteli + Agrominas Fertilizantes.*
