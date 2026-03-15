@@ -179,42 +179,148 @@ Defina o padrão de resposta de erro adotado pela API. Documente o objeto JSON p
 ---
 
 ## 7. Exemplos de Uso por Contexto
+&ensp; Esta seção apresenta situações reais de uso da plataforma, descrevendo como o bot e o painel administrativo interagem com a API em cada caso. Os exemplos utilizam dados fictícios, mas representativos do contexto do projeto.
 
-Apresente cenários de uso reais e completos demonstrando como cada parte do sistema interage com a API. Os cenários abaixo devem ser preenchidos com requisições e respostas realistas baseadas nos dados do projeto Agrominas.
 
 ### 7.1 Cenário: Produtor consulta o bot pelo WhatsApp
 
-Descreva o fluxo completo: o produtor envia uma mensagem sobre um insumo regenerativo, o bot repassa ao endpoint `POST /bot/perguntar`, e a API retorna a resposta com referência ao artigo. Inclua payload de requisição e resposta preenchidos com dados fictícios mas realistas do contexto agrícola.
+**Situação:** O produtor João tem uma lavoura de soja e quer reduzir o custo com adubação nitrogenada. Ele envia uma mensagem ao bot pelo WhatsApp perguntando se existe algum produto que possa ajudá-lo.
 
-```http
-[preencher com exemplo completo de requisição e resposta para este cenário]
+
+
+**O que acontece internamente:** O bot recebe a mensagem e a encaminha para a API. A API identifica os termos "soja" e "adubo nitrogenado", busca os artigos mais relevantes na biblioteca e, com base neles, aciona o modelo de IA para compor uma resposta em linguagem acessível.
+
+**Dados enviados à API:**
+
+```json
+{
+  "pergunta": "Tenho lavoura de soja e quero gastar menos com adubo nitrogenado, tem algum produto que ajude?",
+  "sessao_id": "sess_wa_a1b2c3"
+}
 ```
+
+**Resposta retornada pela API:**
+
+```json
+{
+  "resposta": "Sim! Para reduzir o uso de adubo nitrogenado na soja, o inoculante biológico é a melhor opção. Ele contém bactérias que fixam o nitrogênio do ar diretamente nas raízes da planta.Como funciona:As bactérias formam nódulos nas raízes e convertem o nitrogênio do ar em nutriente disponível para a planta. Em solos bem manejados, pode substituir até 100% da adubação nitrogenada de base. Dica de aplicação:Aplique nas sementes no dia do plantio, à sombra. Evite contato direto com fungicidas. aplique-os separadamente.",
+  "artigos_referenciados": [
+    {
+      "id": "art_09f3a",
+      "titulo": "Uso de Rhizobium na fixação biológica de nitrogênio em soja",
+      "categoria": "biofertilizante"
+    }
+  ],
+  "sessao_id": "sess_wa_a1b2c3",
+  "confianca": "alta"
+}
+```
+
+**Resultado:** O bot entrega a resposta ao produtor João diretamente no WhatsApp, formatada de forma clara e de fácil leitura pelo celular.
 
 ### 7.2 Cenário: Administrador cria um novo artigo pelo painel
 
-Descreva o fluxo de um usuário administrador autenticado que adiciona um novo artigo à biblioteca. Inclua o processo de autenticação (obtenção do token) seguido da chamada `POST /artigos` com todos os campos preenchidos com dados fictícios mas representativos do projeto.
+**Situação:** A especialista técnica da Agrominas acessa o painel administrativo e deseja cadastrar um novo artigo sobre o uso de húmus de minhoca em horticultura.
 
-```http
-[preencher com exemplo completo de requisição e resposta para este cenário]
+**O que acontece:** Preenche o formulário do painel com as informações do artigo: título, resumo, conteúdo, cultura relacionada, categoria e palavras-chave. Ao confirmar, o painel envia essas informações à API, que valida os dados e registra o novo artigo na biblioteca.
+
+**Passo 1: Autenticação no painel:**
+
+&ensp; O administrador acessa o painel com seu e-mail e senha. A API valida as credenciais e retorna um token de acesso que será usado nas operações seguintes.
+
+**Dados enviados:**
+
+```json
+{
+  "email": "tecnica@agrominas.com.br",
+  "senha": "senha123segura"
+}
 ```
+
+**Resposta retornada pela API:**
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "tipo": "Bearer",
+  "expira_em": 86400,
+  "usuario": {
+    "id": "usr_04",
+    "nome": "Fernanda Oliveira",
+    "email": "tecnica@agrominas.com.br",
+    "perfil": "editor"
+  }
+}
+```
+
+**Passo 2: Criação do artigo:**
+
+&ensp; Com o acesso autenticado, o painel envia os dados do novo artigo à API.
+
+**Dados enviados:**
+
+```json
+{
+  "titulo": "Húmus de Minhoca como Fertilizante Orgânico em Horticultura",
+  "resumo": "Este artigo apresenta evidências do uso de húmus de minhoca (vermicomposto) como fertilizante orgânico em cultivos de alface, tomate e cenoura, com melhoria comprovada na estrutura do solo e no teor de matéria orgânica.",
+  "corpo": "O vermicomposto, produzido pela ação de minhocas sobre resíduos orgânicos, é um dos biofertilizantes mais ricos em nutrientes disponíveis para as plantas...",
+  "cultura": "horticultura",
+  "categoria": "organico",
+  "palavras_chave": ["húmus", "vermicomposto", "minhoca", "horticultura", "matéria orgânica"],
+  "referencias": [
+    "KIEHL, E.J. Fertilizantes Orgânicos. Agronômica Ceres, 1985.",
+    "EMBRAPA Hortaliças – Boletim de Pesquisa, 2022"
+  ]
+}
+```
+
+**Resposta da API:**
+
+```json
+{
+  "id": "art_33d8f",
+  "titulo": "Húmus de Minhoca como Fertilizante Orgânico em Horticultura",
+  "cultura": "horticultura",
+  "categoria": "organico",
+  "criado_em": "2025-10-14T16:00:00Z",
+  "mensagem": "Artigo criado com sucesso."
+}
+```
+
+**Resultado:** O artigo é cadastrado na biblioteca e passa a estar disponível para consulta pelo bot e pelo painel administrativo.
+
 
 ### 7.3 Cenário: Administrador atualiza um artigo existente
 
-Descreva o fluxo de edição de conteúdo de um artigo já cadastrado. Inclua a chamada de atualização com apenas os campos alterados.
+**Situação:** Após uma revisão técnica, o administrador identificou que o artigo sobre calcário dolomítico precisava de um resumo mais preciso e de uma nova referência bibliográfica publicada em 2025.
 
-```http
-[preencher com exemplo completo de requisição e resposta para este cenário]
+**O que acontece:** O administrador localiza o artigo no painel, edita apenas os campos que precisam ser alterados e confirma a atualização. O painel envia à API somente os campos modificados — os demais permanecem intactos.
+
+Dados enviados:
+
+```json
+{
+  "resumo": "Análise atualizada do uso de calcário dolomítico para correção de acidez e fornecimento de cálcio e magnésio em pastagens degradadas do cerrado, com novos dados de ensaio de campo de 2025 indicando recuperação completa em 18 meses.",
+  "referencias": [
+    "SOUSA, D.M.G.; LOBATO, E. Cerrado: Correção do Solo e Adubação. Embrapa, 2004",
+    "EMBRAPA Cerrados – Relatório de Ensaios de Campo, 2025",
+    "IAC – Boletim Técnico sobre Calagem, 2023"
+  ]
+}
 ```
 
-### 7.4 Cenário: Bot busca artigos por categoria/cultura
+Resposta da API:
 
-Descreva como o bot (ou o painel) pode listar artigos filtrados por uma cultura específica ou tipo de insumo, utilizando os query params do `GET /artigos`.
-
-```http
-[preencher com exemplo completo de requisição e resposta para este cenário]
+```json
+{
+  "id": "art_28c1e",
+  "titulo": "Calcário Dolomítico como Corretivo de Solo em Pastagens Degradadas",
+  "atualizado_em": "2025-10-14T17:15:00Z",
+  "mensagem": "Artigo atualizado com sucesso."
+}
 ```
 
----
+**Resultado:** O resumo e as referências do artigo são atualizados. Os demais campos — título, corpo, cultura, categoria e palavras-chave — permanecem exatamente como estavam, pois não foram incluídos na solicitação de atualização.
 
 ## 8. Considerações de Segurança
 
