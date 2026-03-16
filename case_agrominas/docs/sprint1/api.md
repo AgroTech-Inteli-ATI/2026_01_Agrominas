@@ -38,19 +38,115 @@ Para cada ambiente, indique também quaisquer observações relevantes, como var
 
 ## 3. Autenticação e Autorização
 
-Detalhe o mecanismo de autenticação adotado para proteger os endpoints sensíveis, especialmente os do painel administrativo (operações de criação, edição e exclusão de artigos). Explique o tipo de token utilizado (ex: JWT, API Key), onde ele deve ser enviado nas requisições, o fluxo de obtenção do token (endpoint de login, validade, renovação) e o comportamento esperado em caso de token expirado ou inválido.
+&ensp; A API utiliza autenticação baseada em **JSON Web Token (JWT)** para proteger endpoints sensíveis, especialmente aqueles relacionados ao painel administrativo de gerenciamento de artigos.
+
+&ensp; A autenticação é necessária para operações que modificam o conteúdo da biblioteca de insumos regenerativos, como criação, edição e exclusão de artigos. Essas operações são restritas a usuários autorizados da equipe de conteúdo da plataforma.
+
+&ensp; O fluxo de autenticação ocorre da seguinte forma:
+
+1. O usuário realiza login no sistema através do endpoint de autenticação.
+2. Após a validação das credenciais, o servidor gera um **token JWT**.
+3. Esse token deve ser enviado em todas as requisições para endpoints protegidos.
+4. O token possui um tempo de expiração definido pelo servidor.
+5. Caso o token esteja expirado ou inválido, a API retornará um erro de autenticação.
+
+&ensp; Os tokens devem ser enviados no header `Authorization` das requisições HTTP.
+
+&ensp; Quando um token inválido ou expirado é enviado, a API retorna:
+
+- `401 Unauthorized` — token ausente, inválido ou expirado
+- `403 Forbidden` — usuário autenticado, porém sem permissão para executar a operação
+
+---
 
 ### 3.1 Rotas Públicas vs. Protegidas
 
-Descreva quais rotas são acessíveis sem autenticação e quais exigem credenciais. Em geral, operações de leitura utilizadas pelo bot (ex: `GET /artigos`) tendem a ser públicas, enquanto operações de escrita do painel administrativo (ex: `POST`, `PUT`, `DELETE` em `/artigos`) devem ser protegidas. Liste aqui cada endpoint com seu respectivo nível de acesso, indicando também o perfil de usuário autorizado quando houver mais de um nível (ex: admin, editor).
+&ensp; A API é dividida entre **rotas públicas**, acessíveis pelo bot do WhatsApp e pelos usuários finais, e **rotas protegidas**, utilizadas pelo painel administrativo para gerenciamento de conteúdo.
+
+#### Rotas Públicas
+
+&ensp; Estas rotas podem ser acessadas sem autenticação.
+
+| Método | Endpoint | Descrição |
+|------|------|------|
+| GET | `/artigos` | Lista artigos disponíveis na biblioteca |
+| GET | `/artigos/{id}` | Retorna um artigo específico |
+| POST | `/perguntar` | Envia uma pergunta ao bot e retorna recomendações |
+
+&ensp; Essas rotas são utilizadas principalmente pelo **bot do WhatsApp**, permitindo que produtores consultem conteúdos técnicos.
+
+---
+
+#### Rotas Protegidas
+
+&ensp; Estas rotas exigem autenticação com token JWT.
+
+| Método | Endpoint | Descrição |
+|------|------|------|
+| POST | `/auth/login` | Realiza autenticação de usuário |
+| POST | `/artigos` | Cria um novo artigo |
+| PUT | `/artigos/{id}` | Atualiza um artigo existente |
+| DELETE | `/artigos/{id}` | Remove um artigo |
+
+&ensp; Essas operações são destinadas ao **painel administrativo de gestão de conteúdo**.
+
+&ensp; Perfis autorizados:
+
+- `admin` — acesso completo ao sistema
+- `editor` — criação e edição de artigos 
+
+---
 
 ### 3.2 Formato do Token / Header de Autorização
 
-Mostre o formato exato do header de autorização que deve ser enviado nas requisições protegidas. Inclua também o endpoint e o payload necessário para obtenção do token (login) e a duração da sessão.
+&ensp; Requisições para endpoints protegidos devem incluir o token JWT no header `Authorization`:
 
 ```http
 Authorization: Bearer [token_aqui]
 ```
+
+#### Endpoint de Login
+
+**`POST /auth/login`**
+
+&ensp; Realiza autenticação de um usuário do painel administrativo.
+
+**Request:**
+
+```json
+{
+  "email": "admin@agrominas.com",
+  "password": "senha_segura"
+}
+```
+
+**Response:**
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expires_in": 3600,
+  "user": {
+    "id": 1,
+    "nome": "Administrador",
+    "role": "admin"
+  }
+}
+```
+
+- `token` — JWT utilizado nas requisições protegidas
+- `expires_in` — tempo de validade em segundos
+- `role` — perfil de autorização do usuário
+
+**Credenciais incorretas:**
+
+```json
+{
+  "error": "Credenciais inválidas"
+}
+```
+
+> HTTP Status: `401 Unauthorized`
 
 ---
 
