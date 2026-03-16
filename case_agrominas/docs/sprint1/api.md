@@ -610,23 +610,75 @@ Resposta da API:
 
 ## 8. Considerações de Segurança
 
-Descreva as medidas de segurança implementadas ou planejadas para a API. Para cada tópico abaixo, indique as decisões técnicas adotadas.
+### Autenticação
 
-**Autenticação** — `[preencher]`
+&ensp; A API utiliza autenticação baseada em **JSON Web Tokens (JWT)** para proteger endpoints sensíveis. Após o login, o servidor gera um token que deve ser incluído no header `Authorization` das requisições protegidas.
 
-**Autorização por perfil** — `[preencher]`
+### Autorização por Perfil
 
-**Rate Limiting** — `[preencher — ex: limite de requisições por IP ou por token, janela de tempo, comportamento ao exceder o limite]`
+&ensp; O sistema utiliza controle de acesso baseado em papéis (**RBAC**) para definir permissões de usuários.
 
-**Validação de inputs** — `[preencher — ex: sanitização para evitar SQL injection e XSS, bibliotecas utilizadas]`
+**Perfis disponíveis:**
 
-**HTTPS / TLS** — `[preencher]`
+- `admin` — acesso completo, incluindo criação, edição e exclusão de artigos
+- `editor` — criação e edição de artigos
 
-**CORS** — `[preencher — origens permitidas, configuração aplicada]`
+&ensp; Rotas administrativas verificam o perfil do usuário antes de permitir a execução da operação.
 
-**Logs e monitoramento** — `[preencher]`
+### Rate Limiting
 
-**Dados sensíveis** — `[preencher — ex: nenhuma informação pessoal do produtor é armazenada, política de retenção de logs]`
+&ensp; Para evitar abuso da API e sobrecarga do sistema, é aplicado rate limiting por endereço IP.
+
+**Exemplo de configuração:** 100 requisições por minuto por IP
+
+&ensp; Ao exceder o limite, a API retorna:
+
+> HTTP Status: `429 Too Many Requests`
+
+### Validação de Inputs
+
+&ensp; Todos os dados recebidos pela API passam por validação e sanitização antes de serem processados.
+
+&ensp; As validações incluem:
+
+- verificação de tipos de dados
+- tamanho máximo de campos
+- presença de campos obrigatórios
+- sanitização para prevenir SQL Injection e Cross-Site Scripting (XSS)
+
+&ensp; Bibliotecas de validação podem incluir ferramentas como **Joi**, **Zod** ou **express-validator**.
+
+### HTTPS / TLS
+
+&ensp; Todas as comunicações com a API devem ocorrer exclusivamente via **HTTPS**, garantindo criptografia dos dados em trânsito e proteção contra interceptação de informações sensíveis.
+
+### CORS
+
+&ensp; A API possui configuração de **Cross-Origin Resource Sharing (CORS)** para permitir requisições apenas de origens autorizadas.
+
+**Exemplo de configuração:**
+
+- domínio do painel administrativo
+- serviços internos do bot
+
+&ensp; Requisições de origens não autorizadas são bloqueadas.
+
+### Logs e Monitoramento
+
+&ensp; A API mantém registros de logs para fins de monitoramento e auditoria, incluindo:
+
+- requisições realizadas
+- erros de autenticação
+- falhas de acesso a endpoints protegidos
+- erros internos do servidor
+
+&ensp; Esses logs auxiliam na identificação de falhas e possíveis tentativas de uso indevido da API.
+
+### Dados Sensíveis
+
+&ensp; A plataforma não armazena dados pessoais sensíveis dos produtores rurais. As interações realizadas pelo bot são utilizadas apenas para responder consultas sobre conteúdos técnicos.
+
+&ensp; Logs de sistema podem armazenar dados de requisição de forma anonimizada para fins de diagnóstico e melhoria do serviço.
 
 ---
 
