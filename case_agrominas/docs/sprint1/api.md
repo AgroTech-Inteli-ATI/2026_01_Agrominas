@@ -152,13 +152,203 @@ Authorization: Bearer [token_aqui]
 
 ## 4. Endpoints
 
-Esta seção deve documentar todos os endpoints da API, organizados por grupo funcional. Cada grupo deve corresponder a um recurso ou domínio da aplicação (ex: artigos, interação com o bot, autenticação). O time de desenvolvimento deve levantar quais recursos precisam ser expostos pela API e, para cada um deles, definir os endpoints necessários antes de preencher esta seção.
+Esta seção documenta os endpoints disponíveis na API da plataforma Guia Regenerativo, responsável por fornecer acesso à biblioteca de insumos regenerativos e permitir a interação do bot do WhatsApp com os produtores rurais.
 
-Para cada endpoint documentado, as seguintes informações são obrigatórias: o método HTTP utilizado (`GET`, `POST`, `PUT`, `PATCH` ou `DELETE`), a rota completa a partir da URL base, o nível de autenticação exigido (público ou autenticado), a descrição do que a operação realiza, os parâmetros aceitos (de path, de query ou no body), a estrutura completa do payload de requisição em JSON quando aplicável, a estrutura completa da resposta de sucesso em JSON com todos os campos descritos, e as possíveis respostas de erro com seus respectivos códigos HTTP.
+Os endpoints estão organizados em três grupos principais:
 
-Além disso, para endpoints que aceitam parâmetros de filtragem, paginação ou ordenação, cada parâmetro deve ter seu nome, tipo de dado, obrigatoriedade e valores aceitos claramente especificados. Para endpoints de escrita (criação e atualização), é necessário separar os campos obrigatórios dos opcionais e indicar as validações aplicadas a cada um (ex: tamanho máximo, formato, lista de valores permitidos). Para endpoints de exclusão, deve-se definir se a deleção é física ou lógica e descrever o comportamento esperado em ambos os cenários (sucesso e recurso não encontrado).
+- **Artigos** — acesso e gerenciamento do conteúdo técnico
+- **Bot** — interação com o assistente via perguntas
+- **Autenticação** — login de usuários administrativos
 
-Cada endpoint deve ainda conter um exemplo completo de requisição HTTP, incluindo headers relevantes, e um exemplo do JSON de resposta esperado.
+---
+
+### 4.1 Listar Artigos
+
+**`GET /artigos`**
+
+Retorna uma lista de artigos disponíveis na biblioteca de insumos regenerativos.
+
+**Autenticação:** Pública
+
+#### Parâmetros de Query (opcional)
+
+| Parâmetro  | Tipo    | Descrição                           |
+|------------|---------|-------------------------------------|
+| `page`     | integer | Página da listagem                  |
+| `limit`    | integer | Quantidade de resultados por página |
+| `categoria`| string  | Filtrar artigos por categoria       |
+
+**Exemplo de Requisição:**
+
+```
+GET /artigos?page=1&limit=10
+```
+
+**Resposta de Sucesso:**
+
+```json
+{
+  "page": 1,
+  "total": 35,
+  "artigos": [
+    {
+      "id": 1,
+      "titulo": "Uso de remineralizadores no manejo do solo",
+      "categoria": "manejo do solo",
+      "resumo": "Estudo sobre aplicação de remineralizadores em sistemas agrícolas",
+      "data_publicacao": "2024-03-01"
+    }
+  ]
+}
+```
+
+---
+
+### 4.2 Obter Artigo Específico
+
+**`GET /artigos/{id}`**
+
+Retorna os detalhes completos de um artigo.
+
+**Autenticação:** Pública
+
+#### Parâmetros de Path
+
+| Parâmetro | Tipo    | Descrição              |
+|-----------|---------|------------------------|
+| `id`      | integer | Identificador do artigo|
+
+**Exemplo de Requisição:**
+
+```
+GET /artigos/1
+```
+
+**Resposta de Sucesso:**
+
+```json
+{
+  "id": 1,
+  "titulo": "Uso de remineralizadores no manejo do solo",
+  "categoria": "manejo do solo",
+  "conteudo": "Conteúdo técnico completo do artigo...",
+  "autor": "Equipe Técnica Agrominas",
+  "data_publicacao": "2024-03-01"
+}
+```
+
+---
+
+### 4.3 Criar Artigo
+
+**`POST /artigos`**
+
+Cria um novo artigo na biblioteca.
+
+**Autenticação:** Requer token JWT  
+**Perfil autorizado:** `admin` ou `editor`
+
+**Request:**
+
+```json
+{
+  "titulo": "Uso de bioinsumos na agricultura regenerativa",
+  "categoria": "bioinsumos",
+  "conteudo": "Conteúdo técnico do artigo...",
+  "autor": "Equipe Técnica Agrominas"
+}
+```
+
+**Resposta de Sucesso:**
+
+```json
+{
+  "id": 42,
+  "message": "Artigo criado com sucesso"
+}
+```
+
+---
+
+### 4.4 Atualizar Artigo
+
+**`PUT /artigos/{id}`**
+
+Atualiza um artigo existente.
+
+**Autenticação:** Requer token JWT
+
+**Request:**
+
+```json
+{
+  "titulo": "Uso de bioinsumos na agricultura regenerativa",
+  "conteudo": "Conteúdo atualizado do artigo..."
+}
+```
+
+**Resposta:**
+
+```json
+{
+  "message": "Artigo atualizado com sucesso"
+}
+```
+
+---
+
+### 4.5 Excluir Artigo
+
+**`DELETE /artigos/{id}`**
+
+Remove um artigo da biblioteca.
+
+**Autenticação:** Requer token JWT  
+**Perfil autorizado:** `admin`
+
+**Resposta:**
+
+```json
+{
+  "message": "Artigo removido com sucesso"
+}
+```
+
+---
+
+### 4.6 Enviar Pergunta ao Bot
+
+**`POST /perguntar`**
+
+Endpoint utilizado pelo bot do WhatsApp para enviar perguntas feitas pelos produtores. A API processa a pergunta e retorna recomendações de artigos relevantes.
+
+**Autenticação:** Pública
+
+**Request:**
+
+```json
+{
+  "pergunta": "Como melhorar a fertilidade do solo de forma sustentável?"
+}
+```
+
+**Response:**
+
+```json
+{
+  "resposta": "Encontramos alguns conteúdos que podem ajudar:",
+  "artigos_recomendados": [
+    {
+      "id": 3,
+      "titulo": "Uso de remineralizadores no manejo do solo"
+    },
+    {
+      "id": 8,
+      "titulo": "Práticas regenerativas para recuperação do solo"
+    }
+  ]
+}
+```
 
 ---
 
