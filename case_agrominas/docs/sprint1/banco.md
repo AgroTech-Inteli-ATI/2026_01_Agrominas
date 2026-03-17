@@ -58,6 +58,13 @@ Esses elementos poderão ser incorporados em versões futuras.
 
 ## 2.4 Entidades do Modelo
 
+<div align="center">
+
+**FIGURA 1 – Diagrama Entidade-Relacionamento**
+[![Diagrama de Entidades](../../assets/mermaid-diagram.png)](mermaid-diagram.png)
+<sub>Fonte: Elaborado pelos autores, 2026.</sub>
+</div>
+
 ### 2.4.1 Usuários Administrativos (`usuarios_admin`)
 
 Responsável por armazenar os usuários que possuem acesso ao painel administrativo.
