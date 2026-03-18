@@ -1,13 +1,4 @@
 # Wireframes
-## Sumário
-
-1. [Visão Geral](#1-visão-geral)
-2. [Objetivo dos Wireframes](#2-objetivo-dos-wireframes)
-3. [Arquitetura das Telas](#3-arquitetura-das-telas)
-4. [Componentes de Interface](#4-componentes-de-interface)
-5. [Estados de Interface e Feedback](#5-estados-de-interface-e-feedback)
-6. [Regras Funcionais e Não Funcionais](#6-regras-funcionais-e-não-funcionais)
-7. [Conclusão](#7-conclusão)
 
 ---
 
@@ -130,4 +121,4 @@ Com essa base, a equipe pode evoluir para prototipação de alta fidelidade e im
 
 ---
 
-*Documento gerado para o projeto Guia Regenerativo - AgroTech Inteli + Agrominas Fertilizantes.*
+_Documento gerado para o projeto Guia Regenerativo - AgroTech Inteli + Agrominas Fertilizantes._

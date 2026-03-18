@@ -1,16 +1,4 @@
-# Especificação da API Backend 
-
-## Sumário
-
-1. [Visão Geral](#1-visão-geral)
-2. [URL Base e Versionamento](#2-url-base-e-versionamento)
-3. [Autenticação e Autorização](#3-autenticação-e-autorização)
-4. [Endpoints](#4-endpoints)
-5. [Fluxo de Integração com IA](#5-fluxo-de-integração-com-ia)
-6. [Estrutura de Erros e Códigos HTTP](#6-estrutura-de-erros-e-códigos-http)
-7. [Exemplos de Uso por Contexto](#7-exemplos-de-uso-por-contexto)
-8. [Considerações de Segurança](#8-considerações-de-segurança)
-9. [Conclusão](#9-conclusão)
+# Especificação da API Backend
 
 ---
 
@@ -71,11 +59,11 @@ Para cada ambiente, indique também quaisquer observações relevantes, como var
 
 &ensp; Estas rotas podem ser acessadas sem autenticação.
 
-| Método | Endpoint | Descrição |
-|------|------|------|
-| GET | `/artigos` | Lista artigos disponíveis na biblioteca |
-| GET | `/artigos/{id}` | Retorna um artigo específico |
-| POST | `/perguntar` | Envia uma pergunta ao bot e retorna recomendações |
+| Método | Endpoint        | Descrição                                         |
+| ------ | --------------- | ------------------------------------------------- |
+| GET    | `/artigos`      | Lista artigos disponíveis na biblioteca           |
+| GET    | `/artigos/{id}` | Retorna um artigo específico                      |
+| POST   | `/perguntar`    | Envia uma pergunta ao bot e retorna recomendações |
 
 &ensp; Essas rotas são utilizadas principalmente pelo **bot do WhatsApp**, permitindo que produtores consultem conteúdos técnicos.
 
@@ -85,19 +73,19 @@ Para cada ambiente, indique também quaisquer observações relevantes, como var
 
 &ensp; Estas rotas exigem autenticação com token JWT.
 
-| Método | Endpoint | Descrição |
-|------|------|------|
-| POST | `/auth/login` | Realiza autenticação de usuário |
-| POST | `/artigos` | Cria um novo artigo |
-| PUT | `/artigos/{id}` | Atualiza um artigo existente |
-| DELETE | `/artigos/{id}` | Remove um artigo |
+| Método | Endpoint        | Descrição                       |
+| ------ | --------------- | ------------------------------- |
+| POST   | `/auth/login`   | Realiza autenticação de usuário |
+| POST   | `/artigos`      | Cria um novo artigo             |
+| PUT    | `/artigos/{id}` | Atualiza um artigo existente    |
+| DELETE | `/artigos/{id}` | Remove um artigo                |
 
 &ensp; Essas operações são destinadas ao **painel administrativo de gestão de conteúdo**.
 
 &ensp; Perfis autorizados:
 
 - `admin` — acesso completo ao sistema
-- `editor` — criação e edição de artigos 
+- `editor` — criação e edição de artigos
 
 ---
 
@@ -176,11 +164,11 @@ Retorna uma lista de artigos disponíveis na biblioteca de insumos regenerativos
 
 #### Parâmetros de Query (opcional)
 
-| Parâmetro  | Tipo    | Descrição                           |
-|------------|---------|-------------------------------------|
-| `page`     | integer | Página da listagem                  |
-| `limit`    | integer | Quantidade de resultados por página |
-| `categoria`| string  | Filtrar artigos por categoria       |
+| Parâmetro   | Tipo    | Descrição                           |
+| ----------- | ------- | ----------------------------------- |
+| `page`      | integer | Página da listagem                  |
+| `limit`     | integer | Quantidade de resultados por página |
+| `categoria` | string  | Filtrar artigos por categoria       |
 
 **Exemplo de Requisição:**
 
@@ -218,9 +206,9 @@ Retorna os detalhes completos de um artigo.
 
 #### Parâmetros de Path
 
-| Parâmetro | Tipo    | Descrição              |
-|-----------|---------|------------------------|
-| `id`      | integer | Identificador do artigo|
+| Parâmetro | Tipo    | Descrição               |
+| --------- | ------- | ----------------------- |
+| `id`      | integer | Identificador do artigo |
 
 **Exemplo de Requisição:**
 
@@ -361,6 +349,7 @@ Endpoint utilizado pelo bot do WhatsApp para enviar perguntas feitas pelos produ
 &ensp; Esta seção descreve o caminho percorrido desde o momento em que o produtor envia uma pergunta pelo WhatsApp até o momento em que recebe uma resposta. O objetivo é deixar claro como as diferentes partes do sistema trabalham juntas para entregar uma resposta útil e baseada em conteúdo técnico confiável.
 
 ### 5.1 Diagrama de Sequência
+
 ```mermaid
 flowchart LR
 
@@ -380,61 +369,68 @@ G --> H["8. Resposta no WhatsApp"]
 ---
 
 #### Etapa 1: Produtor envia uma pergunta ou documento
-&ensp; O produtor rural interage com o bot enviando uma dúvida por texto ou um arquivo no formato *PDF* (como um laudo de análise de solo). O sistema é projetado para entender tanto perguntas diretas quanto dados técnicos contidos em documentos.
 
-*Exemplos:*
-- *Texto:* "Que tipo de calcário devo usar para corrigir o pH do solo na minha lavoura de milho?"
-- *PDF:* Envio de um arquivo analise_solo_fazenda.pdf contendo os níveis de NPK e pH.
+&ensp; O produtor rural interage com o bot enviando uma dúvida por texto ou um arquivo no formato _PDF_ (como um laudo de análise de solo). O sistema é projetado para entender tanto perguntas diretas quanto dados técnicos contidos em documentos.
 
-&ensp; *Comportamento em caso de problema:* Caso o arquivo enviado não seja um PDF suportado ou esteja corrompido, o bot solicita o reenvio ou a digitação dos dados manualmente.
+_Exemplos:_
+
+- _Texto:_ "Que tipo de calcário devo usar para corrigir o pH do solo na minha lavoura de milho?"
+- _PDF:_ Envio de um arquivo analise_solo_fazenda.pdf contendo os níveis de NPK e pH.
+
+&ensp; _Comportamento em caso de problema:_ Caso o arquivo enviado não seja um PDF suportado ou esteja corrompido, o bot solicita o reenvio ou a digitação dos dados manualmente.
 
 ---
 
 #### Etapa 2: Bot encaminha a entrada para a API
+
 &ensp; O bot captura a mensagem ou o arquivo. No caso de PDFs, o arquivo é enviado para um storage temporário ou transmitido via stream para a API, junto com o identificador da sessão do usuário.
 
 ---
 
 #### Etapa 3: API interpreta a entrada (Texto ou PDF)
-&ensp; A API realiza o processamento inicial:
-- *Para Texto:* Identifica palavras-chave como culturas (soja, milho) ou insumos.
-- *Para PDF:* A API utiliza um serviço de extração de texto para ler o conteúdo do documento. Ela busca especificamente por valores técnicos (pH, Alumínio, Fósforo, etc.) para transformar os dados não estruturados do arquivo em dados utilizáveis.
 
-&ensp; *Comportamento em caso de problema:* Se o PDF for uma imagem protegida ou sem texto legível, a API retorna um erro solicitando que o usuário digite os valores principais.
+&ensp; A API realiza o processamento inicial:
+
+- _Para Texto:_ Identifica palavras-chave como culturas (soja, milho) ou insumos.
+- _Para PDF:_ A API utiliza um serviço de extração de texto para ler o conteúdo do documento. Ela busca especificamente por valores técnicos (pH, Alumínio, Fósforo, etc.) para transformar os dados não estruturados do arquivo em dados utilizáveis.
+
+&ensp; _Comportamento em caso de problema:_ Se o PDF for uma imagem protegida ou sem texto legível, a API retorna um erro solicitando que o usuário digite os valores principais.
 
 ---
 
 #### Etapa 4: API busca artigos relevantes na biblioteca
-&ensp; Com os termos extraídos do texto ou os dados técnicos obtidos do PDF, a API consulta a base de dados *Supabase*. O objetivo é encontrar artigos técnicos que correspondam à necessidade do produtor (ex: se o PDF indica solo ácido, a API busca artigos sobre calagem e correção de pH).
+
+&ensp; Com os termos extraídos do texto ou os dados técnicos obtidos do PDF, a API consulta a base de dados _Supabase_. O objetivo é encontrar artigos técnicos que correspondam à necessidade do produtor (ex: se o PDF indica solo ácido, a API busca artigos sobre calagem e correção de pH).
 
 ---
 
 #### Etapa 5: API prepara o contexto para a IA
+
 &ensp; A API consolida todas as informações:
-1.  *A Pergunta/Dados do PDF:* O conteúdo extraído do documento ou a dúvida do produtor.
-2.  *Base de Conhecimento:* O texto dos artigos técnicos encontrados.
-3.  *Persona:* Instrução para a IA agir como assistente técnico especializado da Agrominas.
 
-
+1.  _A Pergunta/Dados do PDF:_ O conteúdo extraído do documento ou a dúvida do produtor.
+2.  _Base de Conhecimento:_ O texto dos artigos técnicos encontrados.
+3.  _Persona:_ Instrução para a IA agir como assistente técnico especializado da Agrominas.
 
 ---
 
 #### Etapa 6: API consulta o modelo de IA
-&ensp; O bloco de informações é enviado para a *OpenAI API. A IA analisa os dados do PDF (ex: *"O pH está em 4.5") cruzando-os com os artigos (ex: "Para pH abaixo de 5.0, recomenda-se calcário dolomítico") para gerar uma recomendação personalizada e segura.
+
+&ensp; O bloco de informações é enviado para a _OpenAI API. A IA analisa os dados do PDF (ex: _"O pH está em 4.5") cruzando-os com os artigos (ex: "Para pH abaixo de 5.0, recomenda-se calcário dolomítico") para gerar uma recomendação personalizada e segura.
 
 ---
 
 #### Etapa 7: API formata a resposta
+
 &ensp; O diagnóstico técnico é transformado em uma mensagem amigável e curta. Valores técnicos complexos são explicados de forma simples, garantindo que o produtor compreenda a recomendação de manejo regenerativo.
 
 ---
 
 #### Etapa 8: Produtor recebe a resposta pelo WhatsApp
+
 &ensp; O bot entrega a resposta final. Se o produtor enviou um PDF de análise, a resposta incluirá um resumo do que a IA "leu" no documento antes de dar a recomendação, garantindo transparência no processo de análise automatizada.
 
-&ensp; *Comportamento em caso de problema:* Se a entrega falhar por limite de tokens ou erro de rede, o log registra o erro para auditoria no painel administrativo.
-
-
+&ensp; _Comportamento em caso de problema:_ Se a entrega falhar por limite de tokens ou erro de rede, o log registra o erro para auditoria no painel administrativo.
 
 ## 6. Estrutura de Erros e Códigos HTTP
 
@@ -444,10 +440,10 @@ Defina o padrão de resposta de erro adotado pela API. Documente o objeto JSON p
 
 ```json
 {
-  "[campo_codigo_erro]":   "[descrição: código interno do erro]",
-  "[campo_mensagem]":      "[descrição: mensagem legível para o consumidor da API]",
-  "[campo_detalhes]":      "[descrição: lista de detalhes adicionais, ex: campos com validação falha]",
-  "[campo_timestamp]":     "[descrição: data/hora do erro]"
+  "[campo_codigo_erro]": "[descrição: código interno do erro]",
+  "[campo_mensagem]": "[descrição: mensagem legível para o consumidor da API]",
+  "[campo_detalhes]": "[descrição: lista de detalhes adicionais, ex: campos com validação falha]",
+  "[campo_timestamp]": "[descrição: data/hora do erro]"
 }
 ```
 
@@ -474,14 +470,12 @@ Defina o padrão de resposta de erro adotado pela API. Documente o objeto JSON p
 ---
 
 ## 7. Exemplos de Uso por Contexto
-&ensp; Esta seção apresenta situações reais de uso da plataforma, descrevendo como o bot e o painel administrativo interagem com a API em cada caso. Os exemplos utilizam dados fictícios, mas representativos do contexto do projeto.
 
+&ensp; Esta seção apresenta situações reais de uso da plataforma, descrevendo como o bot e o painel administrativo interagem com a API em cada caso. Os exemplos utilizam dados fictícios, mas representativos do contexto do projeto.
 
 ### 7.1 Cenário: Produtor consulta o bot pelo WhatsApp
 
 **Situação:** O produtor João tem uma lavoura de soja e quer reduzir o custo com adubação nitrogenada. Ele envia uma mensagem ao bot pelo WhatsApp perguntando se existe algum produto que possa ajudá-lo.
-
-
 
 **O que acontece internamente:** O bot recebe a mensagem e a encaminha para a API. A API identifica os termos "soja" e "adubo nitrogenado", busca os artigos mais relevantes na biblioteca e, com base neles, aciona o modelo de IA para compor uma resposta em linguagem acessível.
 
@@ -561,7 +555,13 @@ Defina o padrão de resposta de erro adotado pela API. Documente o objeto JSON p
   "corpo": "O vermicomposto, produzido pela ação de minhocas sobre resíduos orgânicos, é um dos biofertilizantes mais ricos em nutrientes disponíveis para as plantas...",
   "cultura": "horticultura",
   "categoria": "organico",
-  "palavras_chave": ["húmus", "vermicomposto", "minhoca", "horticultura", "matéria orgânica"],
+  "palavras_chave": [
+    "húmus",
+    "vermicomposto",
+    "minhoca",
+    "horticultura",
+    "matéria orgânica"
+  ],
   "referencias": [
     "KIEHL, E.J. Fertilizantes Orgânicos. Agronômica Ceres, 1985.",
     "EMBRAPA Hortaliças – Boletim de Pesquisa, 2022"
@@ -583,7 +583,6 @@ Defina o padrão de resposta de erro adotado pela API. Documente o objeto JSON p
 ```
 
 **Resultado:** O artigo é cadastrado na biblioteca e passa a estar disponível para consulta pelo bot e pelo painel administrativo.
-
 
 ### 7.3 Cenário: Administrador atualiza um artigo existente
 
@@ -697,4 +696,4 @@ Faça um fechamento do documento resumindo o que foi especificado. Retome brevem
 
 ---
 
-*Documento gerado para o projeto Guia Regenerativo — AgroTech Inteli + Agrominas Fertilizantes.*
+_Documento gerado para o projeto Guia Regenerativo — AgroTech Inteli + Agrominas Fertilizantes._

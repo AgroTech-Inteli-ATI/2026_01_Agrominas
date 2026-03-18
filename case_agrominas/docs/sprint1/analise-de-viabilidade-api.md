@@ -1,4 +1,4 @@
-# Documento de Análise de Viabilidade do MVP com Inteligência Artificial
+# Análise de Viabilidade do MVP com Inteligência Artificial
 
 ## Projeto Agrominas
 
