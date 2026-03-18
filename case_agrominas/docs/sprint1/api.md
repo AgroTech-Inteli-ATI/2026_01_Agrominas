@@ -16,9 +16,13 @@
 
 ## 1. Visão Geral
 
-Descreva em 2 a 4 parágrafos o propósito desta API dentro do projeto. Explique qual problema ela resolve, quais são os principais sistemas que se comunicam por ela (bot do WhatsApp, painel administrativo, modelo de IA) e qual o papel central da API como "ponte" entre esses componentes. Mencione a linguagem/framework escolhido para o backend (ex: Node.js, Python Flask/Django) e o banco de dados utilizado.
+&ensp; A API do projeto **Guia Regenerativo** tem como propósito central atuar como a camada de orquestração responsável por conectar diferentes componentes do sistema e viabilizar a entrega de recomendações técnicas aos produtores rurais. Ela resolve o problema de integração entre a entrada de dados não estruturados (como perguntas em linguagem natural ou arquivos PDF enviados via WhatsApp), a base de conhecimento técnico (artigos) e o processamento inteligente realizado por modelos de IA. Dessa forma, a API garante que as informações fluam de maneira consistente, segura e escalável entre os sistemas envolvidos.
 
-Cubra os seguintes pontos em sequência: o propósito da API, os sistemas integrados (bot, painel admin, IA), as tecnologias utilizadas no backend e um resumo das funcionalidades principais expostas.
+&ensp; Os principais sistemas que se comunicam com a API são o **bot do WhatsApp**, o **painel administrativo** e o **modelo de IA**. O bot atua como ponto de entrada das interações dos produtores, enviando perguntas ou documentos para a API. O painel administrativo, por sua vez, permite que usuários autorizados gerenciem o conteúdo da base de artigos, realizando operações de criação, edição e exclusão. Já o modelo de IA é acionado pela API para interpretar dados, cruzar informações e gerar respostas contextualizadas, tornando a API o elemento central que coordena toda essa comunicação.
+
+&ensp; No backend, a API é desenvolvida utilizando **Node.js** com framework **Express**, adotando uma arquitetura REST para organização dos endpoints e padronização das requisições HTTP. Como banco de dados, é utilizado o **Supabase**, responsável pelo armazenamento e recuperação dos artigos técnicos e demais dados persistentes da aplicação. Além disso, a integração com serviços externos, como a API da OpenAI, permite a incorporação de capacidades avançadas de processamento de linguagem natural.
+
+&ensp; Em termos de funcionalidades, a API expõe endpoints para listagem e consulta de artigos, gerenciamento completo do conteúdo (com autenticação via JWT), e processamento de perguntas enviadas pelo bot. Também é responsável por interpretar entradas (texto ou PDF), buscar informações relevantes na base de dados, montar o contexto para a IA e formatar a resposta final. Assim, a API consolida-se como a principal “ponte” entre interface, dados e inteligência do sistema, garantindo uma experiência fluida e orientada a valor para o usuário final.
 
 ---
 
@@ -38,31 +42,317 @@ Para cada ambiente, indique também quaisquer observações relevantes, como var
 
 ## 3. Autenticação e Autorização
 
-Detalhe o mecanismo de autenticação adotado para proteger os endpoints sensíveis, especialmente os do painel administrativo (operações de criação, edição e exclusão de artigos). Explique o tipo de token utilizado (ex: JWT, API Key), onde ele deve ser enviado nas requisições, o fluxo de obtenção do token (endpoint de login, validade, renovação) e o comportamento esperado em caso de token expirado ou inválido.
+&ensp; A API utiliza autenticação baseada em **JSON Web Token (JWT)** para proteger endpoints sensíveis, especialmente aqueles relacionados ao painel administrativo de gerenciamento de artigos.
+
+&ensp; A autenticação é necessária para operações que modificam o conteúdo da biblioteca de insumos regenerativos, como criação, edição e exclusão de artigos. Essas operações são restritas a usuários autorizados da equipe de conteúdo da plataforma.
+
+&ensp; O fluxo de autenticação ocorre da seguinte forma:
+
+1. O usuário realiza login no sistema através do endpoint de autenticação.
+2. Após a validação das credenciais, o servidor gera um **token JWT**.
+3. Esse token deve ser enviado em todas as requisições para endpoints protegidos.
+4. O token possui um tempo de expiração definido pelo servidor.
+5. Caso o token esteja expirado ou inválido, a API retornará um erro de autenticação.
+
+&ensp; Os tokens devem ser enviados no header `Authorization` das requisições HTTP.
+
+&ensp; Quando um token inválido ou expirado é enviado, a API retorna:
+
+- `401 Unauthorized` — token ausente, inválido ou expirado
+- `403 Forbidden` — usuário autenticado, porém sem permissão para executar a operação
+
+---
 
 ### 3.1 Rotas Públicas vs. Protegidas
 
-Descreva quais rotas são acessíveis sem autenticação e quais exigem credenciais. Em geral, operações de leitura utilizadas pelo bot (ex: `GET /artigos`) tendem a ser públicas, enquanto operações de escrita do painel administrativo (ex: `POST`, `PUT`, `DELETE` em `/artigos`) devem ser protegidas. Liste aqui cada endpoint com seu respectivo nível de acesso, indicando também o perfil de usuário autorizado quando houver mais de um nível (ex: admin, editor).
+&ensp; A API é dividida entre **rotas públicas**, acessíveis pelo bot do WhatsApp e pelos usuários finais, e **rotas protegidas**, utilizadas pelo painel administrativo para gerenciamento de conteúdo.
+
+#### Rotas Públicas
+
+&ensp; Estas rotas podem ser acessadas sem autenticação.
+
+| Método | Endpoint | Descrição |
+|------|------|------|
+| GET | `/artigos` | Lista artigos disponíveis na biblioteca |
+| GET | `/artigos/{id}` | Retorna um artigo específico |
+| POST | `/perguntar` | Envia uma pergunta ao bot e retorna recomendações |
+
+&ensp; Essas rotas são utilizadas principalmente pelo **bot do WhatsApp**, permitindo que produtores consultem conteúdos técnicos.
+
+---
+
+#### Rotas Protegidas
+
+&ensp; Estas rotas exigem autenticação com token JWT.
+
+| Método | Endpoint | Descrição |
+|------|------|------|
+| POST | `/auth/login` | Realiza autenticação de usuário |
+| POST | `/artigos` | Cria um novo artigo |
+| PUT | `/artigos/{id}` | Atualiza um artigo existente |
+| DELETE | `/artigos/{id}` | Remove um artigo |
+
+&ensp; Essas operações são destinadas ao **painel administrativo de gestão de conteúdo**.
+
+&ensp; Perfis autorizados:
+
+- `admin` — acesso completo ao sistema
+- `editor` — criação e edição de artigos 
+
+---
 
 ### 3.2 Formato do Token / Header de Autorização
 
-Mostre o formato exato do header de autorização que deve ser enviado nas requisições protegidas. Inclua também o endpoint e o payload necessário para obtenção do token (login) e a duração da sessão.
+&ensp; Requisições para endpoints protegidos devem incluir o token JWT no header `Authorization`:
 
 ```http
 Authorization: Bearer [token_aqui]
 ```
 
+#### Endpoint de Login
+
+**`POST /auth/login`**
+
+&ensp; Realiza autenticação de um usuário do painel administrativo.
+
+**Request:**
+
+```json
+{
+  "email": "admin@agrominas.com",
+  "password": "senha_segura"
+}
+```
+
+**Response:**
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expires_in": 3600,
+  "user": {
+    "id": 1,
+    "nome": "Administrador",
+    "role": "admin"
+  }
+}
+```
+
+- `token` — JWT utilizado nas requisições protegidas
+- `expires_in` — tempo de validade em segundos
+- `role` — perfil de autorização do usuário
+
+**Credenciais incorretas:**
+
+```json
+{
+  "error": "Credenciais inválidas"
+}
+```
+
+> HTTP Status: `401 Unauthorized`
+
 ---
 
 ## 4. Endpoints
 
-Esta seção deve documentar todos os endpoints da API, organizados por grupo funcional. Cada grupo deve corresponder a um recurso ou domínio da aplicação (ex: artigos, interação com o bot, autenticação). O time de desenvolvimento deve levantar quais recursos precisam ser expostos pela API e, para cada um deles, definir os endpoints necessários antes de preencher esta seção.
+Esta seção documenta os endpoints disponíveis na API da plataforma Guia Regenerativo, responsável por fornecer acesso à biblioteca de insumos regenerativos e permitir a interação do bot do WhatsApp com os produtores rurais.
 
-Para cada endpoint documentado, as seguintes informações são obrigatórias: o método HTTP utilizado (`GET`, `POST`, `PUT`, `PATCH` ou `DELETE`), a rota completa a partir da URL base, o nível de autenticação exigido (público ou autenticado), a descrição do que a operação realiza, os parâmetros aceitos (de path, de query ou no body), a estrutura completa do payload de requisição em JSON quando aplicável, a estrutura completa da resposta de sucesso em JSON com todos os campos descritos, e as possíveis respostas de erro com seus respectivos códigos HTTP.
+Os endpoints estão organizados em três grupos principais:
 
-Além disso, para endpoints que aceitam parâmetros de filtragem, paginação ou ordenação, cada parâmetro deve ter seu nome, tipo de dado, obrigatoriedade e valores aceitos claramente especificados. Para endpoints de escrita (criação e atualização), é necessário separar os campos obrigatórios dos opcionais e indicar as validações aplicadas a cada um (ex: tamanho máximo, formato, lista de valores permitidos). Para endpoints de exclusão, deve-se definir se a deleção é física ou lógica e descrever o comportamento esperado em ambos os cenários (sucesso e recurso não encontrado).
+- **Artigos** — acesso e gerenciamento do conteúdo técnico
+- **Bot** — interação com o assistente via perguntas
+- **Autenticação** — login de usuários administrativos
 
-Cada endpoint deve ainda conter um exemplo completo de requisição HTTP, incluindo headers relevantes, e um exemplo do JSON de resposta esperado.
+---
+
+### 4.1 Listar Artigos
+
+**`GET /artigos`**
+
+Retorna uma lista de artigos disponíveis na biblioteca de insumos regenerativos.
+
+**Autenticação:** Pública
+
+#### Parâmetros de Query (opcional)
+
+| Parâmetro  | Tipo    | Descrição                           |
+|------------|---------|-------------------------------------|
+| `page`     | integer | Página da listagem                  |
+| `limit`    | integer | Quantidade de resultados por página |
+| `categoria`| string  | Filtrar artigos por categoria       |
+
+**Exemplo de Requisição:**
+
+```
+GET /artigos?page=1&limit=10
+```
+
+**Resposta de Sucesso:**
+
+```json
+{
+  "page": 1,
+  "total": 35,
+  "artigos": [
+    {
+      "id": 1,
+      "titulo": "Uso de remineralizadores no manejo do solo",
+      "categoria": "manejo do solo",
+      "resumo": "Estudo sobre aplicação de remineralizadores em sistemas agrícolas",
+      "data_publicacao": "2024-03-01"
+    }
+  ]
+}
+```
+
+---
+
+### 4.2 Obter Artigo Específico
+
+**`GET /artigos/{id}`**
+
+Retorna os detalhes completos de um artigo.
+
+**Autenticação:** Pública
+
+#### Parâmetros de Path
+
+| Parâmetro | Tipo    | Descrição              |
+|-----------|---------|------------------------|
+| `id`      | integer | Identificador do artigo|
+
+**Exemplo de Requisição:**
+
+```
+GET /artigos/1
+```
+
+**Resposta de Sucesso:**
+
+```json
+{
+  "id": 1,
+  "titulo": "Uso de remineralizadores no manejo do solo",
+  "categoria": "manejo do solo",
+  "conteudo": "Conteúdo técnico completo do artigo...",
+  "autor": "Equipe Técnica Agrominas",
+  "data_publicacao": "2024-03-01"
+}
+```
+
+---
+
+### 4.3 Criar Artigo
+
+**`POST /artigos`**
+
+Cria um novo artigo na biblioteca.
+
+**Autenticação:** Requer token JWT  
+**Perfil autorizado:** `admin` ou `editor`
+
+**Request:**
+
+```json
+{
+  "titulo": "Uso de bioinsumos na agricultura regenerativa",
+  "categoria": "bioinsumos",
+  "conteudo": "Conteúdo técnico do artigo...",
+  "autor": "Equipe Técnica Agrominas"
+}
+```
+
+**Resposta de Sucesso:**
+
+```json
+{
+  "id": 42,
+  "message": "Artigo criado com sucesso"
+}
+```
+
+---
+
+### 4.4 Atualizar Artigo
+
+**`PUT /artigos/{id}`**
+
+Atualiza um artigo existente.
+
+**Autenticação:** Requer token JWT
+
+**Request:**
+
+```json
+{
+  "titulo": "Uso de bioinsumos na agricultura regenerativa",
+  "conteudo": "Conteúdo atualizado do artigo..."
+}
+```
+
+**Resposta:**
+
+```json
+{
+  "message": "Artigo atualizado com sucesso"
+}
+```
+
+---
+
+### 4.5 Excluir Artigo
+
+**`DELETE /artigos/{id}`**
+
+Remove um artigo da biblioteca.
+
+**Autenticação:** Requer token JWT  
+**Perfil autorizado:** `admin`
+
+**Resposta:**
+
+```json
+{
+  "message": "Artigo removido com sucesso"
+}
+```
+
+---
+
+### 4.6 Enviar Pergunta ao Bot
+
+**`POST /perguntar`**
+
+Endpoint utilizado pelo bot do WhatsApp para enviar perguntas feitas pelos produtores. A API processa a pergunta e retorna recomendações de artigos relevantes.
+
+**Autenticação:** Pública
+
+**Request:**
+
+```json
+{
+  "pergunta": "Como melhorar a fertilidade do solo de forma sustentável?"
+}
+```
+
+**Response:**
+
+```json
+{
+  "resposta": "Encontramos alguns conteúdos que podem ajudar:",
+  "artigos_recomendados": [
+    {
+      "id": 3,
+      "titulo": "Uso de remineralizadores no manejo do solo"
+    },
+    {
+      "id": 8,
+      "titulo": "Práticas regenerativas para recuperação do solo"
+    }
+  ]
+}
+```
 
 ---
 
@@ -87,57 +377,62 @@ G --> H["8. Resposta no WhatsApp"]
 
 ### 5.2 Detalhamento de Cada Etapa
 
-#### Etapa 1: Produtor envia uma pergunta
+---
 
-&ensp; O produtor rural envia uma mensagem de texto pelo WhatsApp com uma dúvida sobre insumos, manejo do solo ou práticas agrícolas. Não é necessário seguir nenhum formato especial, a pergunta pode ser escrita de forma natural, como em uma conversa.
+#### Etapa 1: Produtor envia uma pergunta ou documento
+&ensp; O produtor rural interage com o bot enviando uma dúvida por texto ou um arquivo no formato *PDF* (como um laudo de análise de solo). O sistema é projetado para entender tanto perguntas diretas quanto dados técnicos contidos em documentos.
 
-**Exemplo:** *"Que tipo de calcário devo usar para corrigir o pH do solo na minha lavoura de milho?"*
+*Exemplos:*
+- *Texto:* "Que tipo de calcário devo usar para corrigir o pH do solo na minha lavoura de milho?"
+- *PDF:* Envio de um arquivo analise_solo_fazenda.pdf contendo os níveis de NPK e pH.
 
-&ensp; Comportamento esperado em caso de problema: Caso a mensagem enviada não seja um texto (por exemplo, um áudio ou imagem), o bot informa ao produtor que, neste momento, apenas mensagens de texto são aceitas.
+&ensp; *Comportamento em caso de problema:* Caso o arquivo enviado não seja um PDF suportado ou esteja corrompido, o bot solicita o reenvio ou a digitação dos dados manualmente.
 
-#### Etapa 2: Bot encaminha a pergunta para a API
+---
 
-&ensp; O bot recebe a mensagem do produtor e a repassa automaticamente para a API, junto com um identificador da conversa. 
-&ensp; Comportamento esperado em caso de problema: Se a API não estiver disponível no momento, o bot informa ao produtor que está com uma instabilidade temporária e pede que tente novamente em breve.
+#### Etapa 2: Bot encaminha a entrada para a API
+&ensp; O bot captura a mensagem ou o arquivo. No caso de PDFs, o arquivo é enviado para um storage temporário ou transmitido via stream para a API, junto com o identificador da sessão do usuário.
 
-#### Etapa 3: API interpreta a pergunta
+---
 
-&ensp; A API analisa o texto recebido para identificar os principais assuntos mencionados pelo produtor, como o nome de uma cultura agrícola (soja, café, pastagem) ou um tipo de insumo (inoculante, húmus, calcário). Essa identificação orienta a busca que será feita na biblioteca de artigos na etapa seguinte. O texto original da pergunta é sempre preservado para ser usado na geração da resposta. 
+#### Etapa 3: API interpreta a entrada (Texto ou PDF)
+&ensp; A API realiza o processamento inicial:
+- *Para Texto:* Identifica palavras-chave como culturas (soja, milho) ou insumos.
+- *Para PDF:* A API utiliza um serviço de extração de texto para ler o conteúdo do documento. Ela busca especificamente por valores técnicos (pH, Alumínio, Fósforo, etc.) para transformar os dados não estruturados do arquivo em dados utilizáveis.
 
-&ensp; Comportamento esperado em caso de problema: Se a mensagem chegar vazia ou ilegível, a API retorna um aviso de erro sem prosseguir para as etapas seguintes.
+&ensp; *Comportamento em caso de problema:* Se o PDF for uma imagem protegida ou sem texto legível, a API retorna um erro solicitando que o usuário digite os valores principais.
+
+---
 
 #### Etapa 4: API busca artigos relevantes na biblioteca
+&ensp; Com os termos extraídos do texto ou os dados técnicos obtidos do PDF, a API consulta a base de dados *Supabase*. O objetivo é encontrar artigos técnicos que correspondam à necessidade do produtor (ex: se o PDF indica solo ácido, a API busca artigos sobre calagem e correção de pH).
 
-&ensp; Com base nos termos identificados na etapa anterior, a API consulta a biblioteca de insumos e recupera os artigos cujo conteúdo tem maior relação com a pergunta do produtor. São selecionados artigos, priorizando os que apresentam maior correspondência com o tema abordado.
+---
 
-&ensp; Comportamento esperado em caso de problema: Se nenhum artigo relevante for encontrado, o fluxo continua e a IA é informada de que não há conteúdo disponível sobre o tema, gerando uma resposta que orienta o produtor a buscar apoio diretamente com a equipe da Agrominas.
+#### Etapa 5: API prepara o contexto para a IA
+&ensp; A API consolida todas as informações:
+1.  *A Pergunta/Dados do PDF:* O conteúdo extraído do documento ou a dúvida do produtor.
+2.  *Base de Conhecimento:* O texto dos artigos técnicos encontrados.
+3.  *Persona:* Instrução para a IA agir como assistente técnico especializado da Agrominas.
 
-#### Etapa 5: API prepara as informações para a IA
 
-&ensp; A API organiza o conteúdo dos artigos encontrados e a pergunta original do produtor em um único bloco de informações estruturado. Esse bloco inclui uma orientação sobre o papel que a IA deve assumir,o de assistente técnico agrícola da Agrominas, e os artigos que ela deve usar como base para formular a resposta. O volume de informações é controlado para garantir que a IA consiga processá-las de forma eficiente.
 
-&ensp; Comportamento esperado em caso de problema: Se o volume de conteúdo dos artigos for muito grande, ele é reduzido automaticamente, sempre preservando as informações mais relevantes.
-
+---
 
 #### Etapa 6: API consulta o modelo de IA
+&ensp; O bloco de informações é enviado para a *OpenAI API. A IA analisa os dados do PDF (ex: *"O pH está em 4.5") cruzando-os com os artigos (ex: "Para pH abaixo de 5.0, recomenda-se calcário dolomítico") para gerar uma recomendação personalizada e segura.
 
-&ensp; A API envia o bloco de informações preparado para um modelo de inteligência artificial, que lê o conteúdo dos artigos e a pergunta do produtor para gerar uma resposta em linguagem natural. A resposta é construída exclusivamente com base no conteúdo da biblioteca, o modelo não inventa informações nem recorre a fontes externas.
-
-&ensp; Comportamento esperado em caso de problema: Se o modelo de IA não responder dentro do tempo esperado ou retornar algum erro, a API envia ao produtor uma mensagem padrão informando que não foi possível gerar uma resposta no momento e sugerindo que entre em contato com a equipe da Agrominas.
-
+---
 
 #### Etapa 7: API formata a resposta
+&ensp; O diagnóstico técnico é transformado em uma mensagem amigável e curta. Valores técnicos complexos são explicados de forma simples, garantindo que o produtor compreenda a recomendação de manejo regenerativo.
 
-&ensp; O texto gerado pela IA é ajustado para funcionar bem dentro do WhatsApp. Caso a resposta seja muito longa, ela é resumida para não ultrapassar o limite adequado para uma mensagem de WhatsApp. Os artigos utilizados como referência são registrados internamente para fins de rastreabilidade, mas não são exibidos diretamente ao produtor nesta versão do MVP.
-
-&ensp; Comportamento esperado em caso de problema: Se o texto formatado vier vazio por algum motivo, a API substitui a resposta por uma mensagem padrão de indisponibilidade antes de enviá-la ao bot.
-
+---
 
 #### Etapa 8: Produtor recebe a resposta pelo WhatsApp
+&ensp; O bot entrega a resposta final. Se o produtor enviou um PDF de análise, a resposta incluirá um resumo do que a IA "leu" no documento antes de dar a recomendação, garantindo transparência no processo de análise automatizada.
 
-&ensp; O bot recebe a resposta formatada da API e a entrega ao produtor como uma mensagem de texto no WhatsApp. O fluxo é concluído e o identificador da conversa é mantido, permitindo que perguntas de acompanhamento na mesma sessão sejam rastreadas. As informações de uso, como quais artigos foram consultados e quantas conversas foram realizadas, são registradas de forma automática para alimentar os relatórios do painel administrativo.
-
-&ensp; Comportamento esperado em caso de problema: Se a entrega da mensagem ao produtor falhar por algum motivo relacionado ao WhatsApp (como número inválido ou sessão expirada), o erro é registrado internamente. O processamento realizado pela API já foi concluído com sucesso; a responsabilidade pelo reenvio é do bot.
+&ensp; *Comportamento em caso de problema:* Se a entrega falhar por limite de tokens ou erro de rede, o log registra o erro para auditoria no painel administrativo.
 
 
 
@@ -324,23 +619,75 @@ Resposta da API:
 
 ## 8. Considerações de Segurança
 
-Descreva as medidas de segurança implementadas ou planejadas para a API. Para cada tópico abaixo, indique as decisões técnicas adotadas.
+### Autenticação
 
-**Autenticação** — `[preencher]`
+&ensp; A API utiliza autenticação baseada em **JSON Web Tokens (JWT)** para proteger endpoints sensíveis. Após o login, o servidor gera um token que deve ser incluído no header `Authorization` das requisições protegidas.
 
-**Autorização por perfil** — `[preencher]`
+### Autorização por Perfil
 
-**Rate Limiting** — `[preencher — ex: limite de requisições por IP ou por token, janela de tempo, comportamento ao exceder o limite]`
+&ensp; O sistema utiliza controle de acesso baseado em papéis (**RBAC**) para definir permissões de usuários.
 
-**Validação de inputs** — `[preencher — ex: sanitização para evitar SQL injection e XSS, bibliotecas utilizadas]`
+**Perfis disponíveis:**
 
-**HTTPS / TLS** — `[preencher]`
+- `admin` — acesso completo, incluindo criação, edição e exclusão de artigos
+- `editor` — criação e edição de artigos
 
-**CORS** — `[preencher — origens permitidas, configuração aplicada]`
+&ensp; Rotas administrativas verificam o perfil do usuário antes de permitir a execução da operação.
 
-**Logs e monitoramento** — `[preencher]`
+### Rate Limiting
 
-**Dados sensíveis** — `[preencher — ex: nenhuma informação pessoal do produtor é armazenada, política de retenção de logs]`
+&ensp; Para evitar abuso da API e sobrecarga do sistema, é aplicado rate limiting por endereço IP.
+
+**Exemplo de configuração:** 100 requisições por minuto por IP
+
+&ensp; Ao exceder o limite, a API retorna:
+
+> HTTP Status: `429 Too Many Requests`
+
+### Validação de Inputs
+
+&ensp; Todos os dados recebidos pela API passam por validação e sanitização antes de serem processados.
+
+&ensp; As validações incluem:
+
+- verificação de tipos de dados
+- tamanho máximo de campos
+- presença de campos obrigatórios
+- sanitização para prevenir SQL Injection e Cross-Site Scripting (XSS)
+
+&ensp; Bibliotecas de validação podem incluir ferramentas como **Joi**, **Zod** ou **express-validator**.
+
+### HTTPS / TLS
+
+&ensp; Todas as comunicações com a API devem ocorrer exclusivamente via **HTTPS**, garantindo criptografia dos dados em trânsito e proteção contra interceptação de informações sensíveis.
+
+### CORS
+
+&ensp; A API possui configuração de **Cross-Origin Resource Sharing (CORS)** para permitir requisições apenas de origens autorizadas.
+
+**Exemplo de configuração:**
+
+- domínio do painel administrativo
+- serviços internos do bot
+
+&ensp; Requisições de origens não autorizadas são bloqueadas.
+
+### Logs e Monitoramento
+
+&ensp; A API mantém registros de logs para fins de monitoramento e auditoria, incluindo:
+
+- requisições realizadas
+- erros de autenticação
+- falhas de acesso a endpoints protegidos
+- erros internos do servidor
+
+&ensp; Esses logs auxiliam na identificação de falhas e possíveis tentativas de uso indevido da API.
+
+### Dados Sensíveis
+
+&ensp; A plataforma não armazena dados pessoais sensíveis dos produtores rurais. As interações realizadas pelo bot são utilizadas apenas para responder consultas sobre conteúdos técnicos.
+
+&ensp; Logs de sistema podem armazenar dados de requisição de forma anonimizada para fins de diagnóstico e melhoria do serviço.
 
 ---
 
