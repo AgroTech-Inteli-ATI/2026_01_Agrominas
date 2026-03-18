@@ -373,57 +373,62 @@ G --> H["8. Resposta no WhatsApp"]
 
 ### 5.2 Detalhamento de Cada Etapa
 
-#### Etapa 1: Produtor envia uma pergunta
+---
 
-&ensp; O produtor rural envia uma mensagem de texto pelo WhatsApp com uma dúvida sobre insumos, manejo do solo ou práticas agrícolas. Não é necessário seguir nenhum formato especial, a pergunta pode ser escrita de forma natural, como em uma conversa.
+#### Etapa 1: Produtor envia uma pergunta ou documento
+&ensp; O produtor rural interage com o bot enviando uma dúvida por texto ou um arquivo no formato *PDF* (como um laudo de análise de solo). O sistema é projetado para entender tanto perguntas diretas quanto dados técnicos contidos em documentos.
 
-**Exemplo:** *"Que tipo de calcário devo usar para corrigir o pH do solo na minha lavoura de milho?"*
+*Exemplos:*
+- *Texto:* "Que tipo de calcário devo usar para corrigir o pH do solo na minha lavoura de milho?"
+- *PDF:* Envio de um arquivo analise_solo_fazenda.pdf contendo os níveis de NPK e pH.
 
-&ensp; Comportamento esperado em caso de problema: Caso a mensagem enviada não seja um texto (por exemplo, um áudio ou imagem), o bot informa ao produtor que, neste momento, apenas mensagens de texto são aceitas.
+&ensp; *Comportamento em caso de problema:* Caso o arquivo enviado não seja um PDF suportado ou esteja corrompido, o bot solicita o reenvio ou a digitação dos dados manualmente.
 
-#### Etapa 2: Bot encaminha a pergunta para a API
+---
 
-&ensp; O bot recebe a mensagem do produtor e a repassa automaticamente para a API, junto com um identificador da conversa. 
-&ensp; Comportamento esperado em caso de problema: Se a API não estiver disponível no momento, o bot informa ao produtor que está com uma instabilidade temporária e pede que tente novamente em breve.
+#### Etapa 2: Bot encaminha a entrada para a API
+&ensp; O bot captura a mensagem ou o arquivo. No caso de PDFs, o arquivo é enviado para um storage temporário ou transmitido via stream para a API, junto com o identificador da sessão do usuário.
 
-#### Etapa 3: API interpreta a pergunta
+---
 
-&ensp; A API analisa o texto recebido para identificar os principais assuntos mencionados pelo produtor, como o nome de uma cultura agrícola (soja, café, pastagem) ou um tipo de insumo (inoculante, húmus, calcário). Essa identificação orienta a busca que será feita na biblioteca de artigos na etapa seguinte. O texto original da pergunta é sempre preservado para ser usado na geração da resposta. 
+#### Etapa 3: API interpreta a entrada (Texto ou PDF)
+&ensp; A API realiza o processamento inicial:
+- *Para Texto:* Identifica palavras-chave como culturas (soja, milho) ou insumos.
+- *Para PDF:* A API utiliza um serviço de extração de texto para ler o conteúdo do documento. Ela busca especificamente por valores técnicos (pH, Alumínio, Fósforo, etc.) para transformar os dados não estruturados do arquivo em dados utilizáveis.
 
-&ensp; Comportamento esperado em caso de problema: Se a mensagem chegar vazia ou ilegível, a API retorna um aviso de erro sem prosseguir para as etapas seguintes.
+&ensp; *Comportamento em caso de problema:* Se o PDF for uma imagem protegida ou sem texto legível, a API retorna um erro solicitando que o usuário digite os valores principais.
+
+---
 
 #### Etapa 4: API busca artigos relevantes na biblioteca
+&ensp; Com os termos extraídos do texto ou os dados técnicos obtidos do PDF, a API consulta a base de dados *Supabase*. O objetivo é encontrar artigos técnicos que correspondam à necessidade do produtor (ex: se o PDF indica solo ácido, a API busca artigos sobre calagem e correção de pH).
 
-&ensp; Com base nos termos identificados na etapa anterior, a API consulta a biblioteca de insumos e recupera os artigos cujo conteúdo tem maior relação com a pergunta do produtor. São selecionados artigos, priorizando os que apresentam maior correspondência com o tema abordado.
+---
 
-&ensp; Comportamento esperado em caso de problema: Se nenhum artigo relevante for encontrado, o fluxo continua e a IA é informada de que não há conteúdo disponível sobre o tema, gerando uma resposta que orienta o produtor a buscar apoio diretamente com a equipe da Agrominas.
+#### Etapa 5: API prepara o contexto para a IA
+&ensp; A API consolida todas as informações:
+1.  *A Pergunta/Dados do PDF:* O conteúdo extraído do documento ou a dúvida do produtor.
+2.  *Base de Conhecimento:* O texto dos artigos técnicos encontrados.
+3.  *Persona:* Instrução para a IA agir como assistente técnico especializado da Agrominas.
 
-#### Etapa 5: API prepara as informações para a IA
 
-&ensp; A API organiza o conteúdo dos artigos encontrados e a pergunta original do produtor em um único bloco de informações estruturado. Esse bloco inclui uma orientação sobre o papel que a IA deve assumir,o de assistente técnico agrícola da Agrominas, e os artigos que ela deve usar como base para formular a resposta. O volume de informações é controlado para garantir que a IA consiga processá-las de forma eficiente.
 
-&ensp; Comportamento esperado em caso de problema: Se o volume de conteúdo dos artigos for muito grande, ele é reduzido automaticamente, sempre preservando as informações mais relevantes.
-
+---
 
 #### Etapa 6: API consulta o modelo de IA
+&ensp; O bloco de informações é enviado para a *OpenAI API. A IA analisa os dados do PDF (ex: *"O pH está em 4.5") cruzando-os com os artigos (ex: "Para pH abaixo de 5.0, recomenda-se calcário dolomítico") para gerar uma recomendação personalizada e segura.
 
-&ensp; A API envia o bloco de informações preparado para um modelo de inteligência artificial, que lê o conteúdo dos artigos e a pergunta do produtor para gerar uma resposta em linguagem natural. A resposta é construída exclusivamente com base no conteúdo da biblioteca, o modelo não inventa informações nem recorre a fontes externas.
-
-&ensp; Comportamento esperado em caso de problema: Se o modelo de IA não responder dentro do tempo esperado ou retornar algum erro, a API envia ao produtor uma mensagem padrão informando que não foi possível gerar uma resposta no momento e sugerindo que entre em contato com a equipe da Agrominas.
-
+---
 
 #### Etapa 7: API formata a resposta
+&ensp; O diagnóstico técnico é transformado em uma mensagem amigável e curta. Valores técnicos complexos são explicados de forma simples, garantindo que o produtor compreenda a recomendação de manejo regenerativo.
 
-&ensp; O texto gerado pela IA é ajustado para funcionar bem dentro do WhatsApp. Caso a resposta seja muito longa, ela é resumida para não ultrapassar o limite adequado para uma mensagem de WhatsApp. Os artigos utilizados como referência são registrados internamente para fins de rastreabilidade, mas não são exibidos diretamente ao produtor nesta versão do MVP.
-
-&ensp; Comportamento esperado em caso de problema: Se o texto formatado vier vazio por algum motivo, a API substitui a resposta por uma mensagem padrão de indisponibilidade antes de enviá-la ao bot.
-
+---
 
 #### Etapa 8: Produtor recebe a resposta pelo WhatsApp
+&ensp; O bot entrega a resposta final. Se o produtor enviou um PDF de análise, a resposta incluirá um resumo do que a IA "leu" no documento antes de dar a recomendação, garantindo transparência no processo de análise automatizada.
 
-&ensp; O bot recebe a resposta formatada da API e a entrega ao produtor como uma mensagem de texto no WhatsApp. O fluxo é concluído e o identificador da conversa é mantido, permitindo que perguntas de acompanhamento na mesma sessão sejam rastreadas. As informações de uso, como quais artigos foram consultados e quantas conversas foram realizadas, são registradas de forma automática para alimentar os relatórios do painel administrativo.
-
-&ensp; Comportamento esperado em caso de problema: Se a entrega da mensagem ao produtor falhar por algum motivo relacionado ao WhatsApp (como número inválido ou sessão expirada), o erro é registrado internamente. O processamento realizado pela API já foi concluído com sucesso; a responsabilidade pelo reenvio é do bot.
+&ensp; *Comportamento em caso de problema:* Se a entrega falhar por limite de tokens ou erro de rede, o log registra o erro para auditoria no painel administrativo.
 
 
 
