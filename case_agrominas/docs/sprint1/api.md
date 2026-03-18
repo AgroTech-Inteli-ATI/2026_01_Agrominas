@@ -16,10 +16,13 @@
 
 ## 1. Visão Geral
 
-Descreva em 2 a 4 parágrafos o propósito desta API dentro do projeto. Explique qual problema ela resolve, quais são os principais sistemas que se comunicam por ela (bot do WhatsApp, painel administrativo, modelo de IA) e qual o papel central da API como "ponte" entre esses componentes. Mencione a linguagem/framework escolhido para o backend (ex: Node.js, Python Flask/Django) e o banco de dados utilizado.
+&ensp; A API do projeto Guia Regenerativo tem como propósito central atuar como a camada de orquestração responsável por conectar diferentes componentes do sistema e viabilizar a entrega de recomendações técnicas aos produtores rurais. Ela resolve o problema de integração entre a entrada de dados não estruturados (como perguntas em linguagem natural ou arquivos PDF enviados via WhatsApp), a base de conhecimento técnico (artigos) e o processamento inteligente realizado por modelos de IA. Dessa forma, a API garante que as informações fluam de maneira consistente, segura e escalável entre os sistemas envolvidos.
 
-Cubra os seguintes pontos em sequência: o propósito da API, os sistemas integrados (bot, painel admin, IA), as tecnologias utilizadas no backend e um resumo das funcionalidades principais expostas.
+&ensp; Os principais sistemas que se comunicam com a API são o bot do WhatsApp, o painel administrativo e o modelo de IA. O bot atua como ponto de entrada das interações dos produtores, enviando perguntas ou documentos para a API. O painel administrativo, por sua vez, permite que usuários autorizados gerenciem o conteúdo da base de artigos, realizando operações de criação, edição e exclusão. Já o modelo de IA é acionado pela API para interpretar dados, cruzar informações e gerar respostas contextualizadas, tornando a API o elemento central que coordena toda essa comunicação.
 
+&ensp; No backend, a API é desenvolvida utilizando Node.js com framework Express, adotando uma arquitetura REST para organização dos endpoints e padronização das requisições HTTP. Como banco de dados, é utilizado o Supabase, responsável pelo armazenamento e recuperação dos artigos técnicos e demais dados persistentes da aplicação. Além disso, a integração com serviços externos, como a API da OpenAI, permite a incorporação de capacidades avançadas de processamento de linguagem natural.
+
+&ensp; Em termos de funcionalidades, a API expõe endpoints para listagem e consulta de artigos, gerenciamento completo do conteúdo (com autenticação via JWT), e processamento de perguntas enviadas pelo bot. Também é responsável por interpretar entradas (texto ou PDF), buscar informações relevantes na base de dados, montar o contexto para a IA e formatar a resposta final. Assim, a API consolida-se como a principal “ponte” entre interface, dados e inteligência do sistema, garantindo uma experiência fluida e orientada a valor para o usuário final.
 ---
 
 ## 2. URL Base e Versionamento
