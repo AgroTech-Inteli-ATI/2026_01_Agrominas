@@ -2,10 +2,7 @@ from src.ai.cliente_openai import cliente
 
 
 def analisar_solo(texto_analise: str, pergunta_produtor: str) -> str:
-    """
-    Agente agronômico responsável por interpretar análise de solo
-    e gerar recomendações agrícolas.
-    """
+
 
     prompt = f"""
 Você é um engenheiro agrônomo especialista em fertilidade do solo.

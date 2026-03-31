@@ -1,4 +1,4 @@
-from src.services.processar_analise import processar_analise
+from src.service.processar_analise import processar_analise
 
 
 def receber_mensagem_whatsapp(dados):
