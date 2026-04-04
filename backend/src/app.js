@@ -36,6 +36,9 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
+// ─── ROTAS ────────────────────────────────────────────────────────────────────
+app.use('/api/v1', routes);
+
 // ─── ROTAS DA API ─────────────────────────────────────────────────────────────
 app.use('/api/v1', routes);
 
