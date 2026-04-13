@@ -1,7 +1,7 @@
 // Pagina de confirmacao para revisao e envio dos arquivos selecionados
 // Permite editar metadados antes de salvar na biblioteca
 import api from '../js/api.js';
-import { renderLayout, showToast, showLoading, openModal, closeModal } from '../js/utils.js';
+import { renderLayout, showToast, openModal, closeModal } from '../js/utils.js';
 import router from '../js/router.js';
 
 // Estado local para arquivos pendentes e dados auxiliares
@@ -249,7 +249,7 @@ async function enviarTodos() {
         conteudo: arquivo.conteudo || arquivo.url || '',
         autor: arquivo.autor || '',
         fonte: arquivo.fonte || arquivo.url || '',
-        status: arquivo.status || 'rascunho',
+        status: arquivo.status || 'publicado',
         categorias: arquivo.categorias || [],
         insumos: arquivo.insumos || []
       };
