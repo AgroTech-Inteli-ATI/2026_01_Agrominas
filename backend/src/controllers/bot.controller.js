@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabase.js';
+import { responderRAQ, recuperarContextoRAQ } from '../services/raq.service.js';
 
 // Palavras-chave mapeadas para filtros — base para evolução futura com NLP/IA
 const INTENCOES = {
@@ -127,6 +128,45 @@ export const buscarArtigos = async (req, res, next) => {
   }
 };
 
+// POST /bot/raq - pergunta do produtor respondida com contexto do banco + OpenAI
+export const responderPerguntaRAQ = async (req, res, next) => {
+  try {
+    const { pergunta, mensagem, limit = 5 } = req.body;
+    const texto = pergunta || mensagem;
+
+    if (!texto) {
+      return res.status(400).json({ error: 'Campo "pergunta" ou "mensagem" e obrigatorio.' });
+    }
+
+    const resultado = await responderRAQ(texto, { limit });
+
+    res.json({
+      pergunta: texto,
+      ...resultado,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /bot/contexto - somente recupera os trechos/fontes usados pelo RAQ
+export const recuperarContexto = async (req, res, next) => {
+  try {
+    const { pergunta, termo, limit = 5 } = req.body;
+    const texto = pergunta || termo;
+
+    if (!texto) {
+      return res.status(400).json({ error: 'Campo "pergunta" ou "termo" e obrigatorio.' });
+    }
+
+    const resultado = await recuperarContextoRAQ(texto, { limit });
+    res.json({ pergunta: texto, ...resultado });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // GET /bot/metricas  — métricas básicas de uso (mock + dados reais de artigos)
 export const obterMetricas = async (req, res, next) => {
   try {
@@ -196,17 +236,6 @@ async function respostaCategorias() {
 }
 
 async function buscarConteudo(termo) {
-  const { data } = await supabase
-    .from('artigos')
-    .select('titulo, resumo')
-    .eq('status', 'publicado')
-    .ilike('titulo', `%${termo}%`)
-    .limit(3);
-
-  if (!data?.length) {
-    return `Não encontrei artigos sobre "${termo}". Tente outros termos como: solo, bokashi, compostagem, biofertilizante.`;
-  }
-
-  const lista = data.map((a) => `📄 *${a.titulo}*\n${a.resumo || ''}`).join('\n\n');
-  return `Encontrei ${data.length} resultado(s):\n\n${lista}`;
+  const resultadoRAQ = await responderRAQ(termo, { limit: 3 });
+  return resultadoRAQ.resposta;
 }
