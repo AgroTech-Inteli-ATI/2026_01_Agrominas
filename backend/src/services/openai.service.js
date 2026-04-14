@@ -18,25 +18,32 @@ export async function gerarRespostaComOpenAI({ pergunta, contexto }) {
     throw new Error('A versao do Node precisa ter fetch nativo para chamar a OpenAI.');
   }
 
-  const instrucoes = [
-    'Voce e um assistente agronomico do Guia Regenerativo da Agrominas.',
-    'Responda em portugues do Brasil, de forma clara, pratica e objetiva.',
-    'Use exclusivamente as informacoes do CONTEXTO recuperado do banco de dados.',
-    'Se o contexto nao trouxer base suficiente, diga que nao ha informacao suficiente na base.',
-    'Nao invente doses, recomendacoes tecnicas, fontes ou resultados nao presentes no contexto.',
-    'Quando houver informacao util, organize a resposta em: resposta direta, orientacoes praticas e fontes consultadas.',
-  ].join('\n');
+  const input = `
+Voce e um engenheiro agronomo especialista em fertilidade do solo e agricultura regenerativa.
 
-  const input = [
-    {
-      role: 'system',
-      content: instrucoes,
-    },
-    {
-      role: 'user',
-      content: `PERGUNTA DO PRODUTOR:\n${pergunta}\n\nCONTEXTO RECUPERADO DO BANCO:\n${contexto}`,
-    },
-  ];
+Analise os dados abaixo. Eles foram recuperados do banco de dados do Guia Regenerativo da Agrominas e devem ser tratados como a unica base de conhecimento disponivel para esta resposta.
+
+CONTEXTO RECUPERADO DO BANCO:
+${contexto}
+
+PERGUNTA DO PRODUTOR:
+${pergunta}
+
+Responda de forma clara e pratica contendo:
+
+1. Diagnostico do solo ou do contexto produtivo
+2. Problemas encontrados
+3. Correcoes recomendadas
+4. Produtos ou insumos indicados
+5. Forma de aplicacao
+6. Fontes consultadas
+
+Regras obrigatorias:
+- Use somente as informacoes presentes no contexto recuperado do banco.
+- Se o contexto nao tiver informacao suficiente para algum item, diga explicitamente que a base nao traz dados suficientes.
+- Nao invente doses, produtos, fontes, resultados ou formas de aplicacao.
+- Quando a pergunta nao envolver analise de solo, adapte os cinco primeiros itens ao tema agricola perguntado sem sair do contexto.
+`;
 
   const response = await fetch(OPENAI_API_URL, {
     method: 'POST',
