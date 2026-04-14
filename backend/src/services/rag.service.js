@@ -7,14 +7,14 @@ const STOPWORDS = new Set([
   'por', 'qual', 'quais', 'que', 'sobre', 'um', 'uma', 'usar', 'uso',
 ]);
 
-const SELECT_ARTIGOS_RAQ = `
+const SELECT_ARTIGOS_RAG = `
   id, titulo, resumo, conteudo, autor, fonte, data_publicacao,
   artigos_categorias (categorias (id, nome)),
   artigos_insumos (insumos_regenerativos (id, nome, descricao, beneficios, modo_aplicacao)),
   metadados_artigos (*)
 `;
 
-export async function responderRAQ(pergunta, opcoes = {}) {
+export async function responderRAG(pergunta, opcoes = {}) {
   const limite = normalizarLimite(opcoes.limit);
   const candidatos = await buscarCandidatos();
   const ranqueados = ranquearArtigos(candidatos, pergunta).slice(0, limite);
@@ -45,7 +45,7 @@ export async function responderRAQ(pergunta, opcoes = {}) {
   };
 }
 
-export async function recuperarContextoRAQ(pergunta, opcoes = {}) {
+export async function recuperarContextoRAG(pergunta, opcoes = {}) {
   const limite = normalizarLimite(opcoes.limit);
   const candidatos = await buscarCandidatos();
   const ranqueados = ranquearArtigos(candidatos, pergunta).slice(0, limite);
@@ -59,7 +59,7 @@ export async function recuperarContextoRAQ(pergunta, opcoes = {}) {
 async function buscarCandidatos() {
   const { data, error } = await supabase
     .from('artigos')
-    .select(SELECT_ARTIGOS_RAQ)
+    .select(SELECT_ARTIGOS_RAG)
     .eq('status', 'publicado')
     .limit(100);
 

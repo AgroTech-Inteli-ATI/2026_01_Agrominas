@@ -1,12 +1,12 @@
 ---
 sidebar_position: 6
-title: RAQ do Bot
-description: Implementacao do RAQ/RAG para o bot consultar o banco e gerar respostas com OpenAI
+title: RAG do Bot
+description: Implementacao do RAG para o bot consultar o banco e gerar respostas com OpenAI
 ---
 
-# RAQ do Bot
+# RAG do Bot
 
-O RAQ/RAG do bot permite responder perguntas do produtor usando os artigos publicados no banco Supabase como base de conhecimento antes de chamar a OpenAI.
+O RAG do bot permite responder perguntas do produtor usando os artigos publicados no banco Supabase como base de conhecimento antes de chamar a OpenAI.
 
 ## Fluxo
 
@@ -14,10 +14,10 @@ O RAQ/RAG do bot permite responder perguntas do produtor usando os artigos publi
 Pergunta do produtor
        |
        v
-POST /api/v1/bot/raq
+POST /api/v1/bot/rag
        |
        v
-raq.service.js busca artigos publicados no Supabase
+rag.service.js busca artigos publicados no Supabase
        |
        v
 ranking por titulo, resumo, conteudo, categorias, insumos e metadados
@@ -33,9 +33,9 @@ resposta + fontes usadas
 
 ```text
 backend/src/controllers/bot.controller.js   # entrada HTTP do bot
-backend/src/services/raq.service.js         # busca, ranking e montagem do contexto
+backend/src/services/rag.service.js         # busca, ranking e montagem do contexto
 backend/src/services/openai.service.js      # chamada para a OpenAI Responses API
-backend/src/routes/index.js                 # rotas /bot/raq e /bot/contexto
+backend/src/routes/index.js                 # rotas /bot/rag e /bot/contexto
 ```
 
 ## O que precisa instalar
@@ -76,7 +76,7 @@ Se `OPENAI_API_KEY` nao estiver configurada, o endpoint ainda consegue recuperar
 Para validar as respostas, e necessario usar **dois terminais do Git Bash** ao mesmo tempo:
 
 - **Terminal 1:** sobe o backend e deve permanecer aberto durante todo o teste;
-- **Terminal 2:** envia as requisicoes para validar o RAQ/RAG no banco e a resposta da OpenAI.
+- **Terminal 2:** envia as requisicoes para validar o RAG no banco e a resposta da OpenAI.
 
 Nao feche o Terminal 1 enquanto estiver testando. O comando `npm.cmd run dev` deixa o servidor em execucao continua, entao esse terminal fica ocupado aguardando novas requisicoes.
 
@@ -94,7 +94,7 @@ O servidor deve exibir algo parecido com:
 ```text
 Conexao com Supabase OK
 Servidor rodando em http://localhost:3000/api/v1
-POST   /api/v1/bot/raq
+POST   /api/v1/bot/rag
 POST   /api/v1/bot/contexto
 ```
 
@@ -122,7 +122,7 @@ Resultado esperado:
 
 ## Testar somente o contexto recuperado
 
-Antes de chamar a OpenAI, e util validar quais artigos o RAQ esta puxando do banco:
+Antes de chamar a OpenAI, e util validar quais artigos o RAG esta puxando do banco:
 
 ```powershell
 $body = @{
@@ -173,7 +173,7 @@ $body = @{
 
 $res = Invoke-RestMethod `
   -Method POST `
-  -Uri "http://localhost:3000/api/v1/bot/raq" `
+  -Uri "http://localhost:3000/api/v1/bot/rag" `
   -ContentType "application/json" `
   -Body $body
 
@@ -205,7 +205,7 @@ O campo `modo` indica o estado da resposta:
 Com o servidor ainda rodando em outro terminal, execute no Git Bash:
 
 ```bash
-curl -X POST "http://localhost:3000/api/v1/bot/raq" \
+curl -X POST "http://localhost:3000/api/v1/bot/rag" \
   -H "Content-Type: application/json" \
   -d '{"pergunta":"como usar biofertilizante no milho?","limit":3}'
 ```
@@ -215,7 +215,7 @@ Assim como no teste de contexto, o JSON enviado no `-d` deve terminar apenas com
 Versao formatada com `jq`:
 
 ```bash
-curl -s -X POST "http://localhost:3000/api/v1/bot/raq" \
+curl -s -X POST "http://localhost:3000/api/v1/bot/rag" \
   -H "Content-Type: application/json" \
   -d '{"pergunta":"como usar biofertilizante no milho?","limit":3}' | jq
 ```
@@ -246,4 +246,4 @@ O correto e:
 {"pergunta":"agricultura tropical regenerativa","limit":3}
 ```
 
-Se a resposta disser que nao ha informacao suficiente na base, isso nao significa erro no RAQ. Significa que os artigos recuperados nao trazem dados tecnicos suficientes para responder aquela pergunta sem inventar informacao.
+Se a resposta disser que nao ha informacao suficiente na base, isso nao significa erro no RAG. Significa que os artigos recuperados nao trazem dados tecnicos suficientes para responder aquela pergunta sem inventar informacao.
