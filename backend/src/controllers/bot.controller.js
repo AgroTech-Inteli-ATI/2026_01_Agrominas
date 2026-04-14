@@ -1,5 +1,5 @@
 import { supabase } from '../config/supabase.js';
-import { responderRAQ, recuperarContextoRAQ } from '../services/raq.service.js';
+import { responderRAG, recuperarContextoRAG } from '../services/rag.service.js';
 
 // Palavras-chave mapeadas para filtros — base para evolução futura com NLP/IA
 const INTENCOES = {
@@ -128,8 +128,8 @@ export const buscarArtigos = async (req, res, next) => {
   }
 };
 
-// POST /bot/raq - pergunta do produtor respondida com contexto do banco + OpenAI
-export const responderPerguntaRAQ = async (req, res, next) => {
+// POST /bot/rag - pergunta do produtor respondida com contexto do banco + OpenAI
+export const responderPerguntaRAG = async (req, res, next) => {
   try {
     const { pergunta, mensagem, limit = 5 } = req.body;
     const texto = pergunta || mensagem;
@@ -138,7 +138,7 @@ export const responderPerguntaRAQ = async (req, res, next) => {
       return res.status(400).json({ error: 'Campo "pergunta" ou "mensagem" e obrigatorio.' });
     }
 
-    const resultado = await responderRAQ(texto, { limit });
+    const resultado = await responderRAG(texto, { limit });
 
     res.json({
       pergunta: texto,
@@ -150,7 +150,7 @@ export const responderPerguntaRAQ = async (req, res, next) => {
   }
 };
 
-// POST /bot/contexto - somente recupera os trechos/fontes usados pelo RAQ
+// POST /bot/contexto - somente recupera os trechos/fontes usados pelo RAG
 export const recuperarContexto = async (req, res, next) => {
   try {
     const { pergunta, termo, limit = 5 } = req.body;
@@ -160,7 +160,7 @@ export const recuperarContexto = async (req, res, next) => {
       return res.status(400).json({ error: 'Campo "pergunta" ou "termo" e obrigatorio.' });
     }
 
-    const resultado = await recuperarContextoRAQ(texto, { limit });
+    const resultado = await recuperarContextoRAG(texto, { limit });
     res.json({ pergunta: texto, ...resultado });
   } catch (err) {
     next(err);
@@ -236,6 +236,6 @@ async function respostaCategorias() {
 }
 
 async function buscarConteudo(termo) {
-  const resultadoRAQ = await responderRAQ(termo, { limit: 3 });
-  return resultadoRAQ.resposta;
+  const resultadoRAG = await responderRAG(termo, { limit: 3 });
+  return resultadoRAG.resposta;
 }

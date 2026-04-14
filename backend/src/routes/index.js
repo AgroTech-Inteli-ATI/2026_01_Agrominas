@@ -143,19 +143,19 @@ router.post('/bot/webhook', botCtrl.receberMensagem);
 // Busca de artigos para o bot — sem auth para facilitar integração
 router.post('/bot/buscar', botCtrl.buscarArtigos);
 
-// RAQ/RAG - recupera contexto do banco e gera resposta com OpenAI
+// RAG - recupera contexto do banco e gera resposta com OpenAI
 router.post(
-  '/bot/raq',
+  '/bot/rag',
   [
     body('pergunta').optional().isString().trim().isLength({ min: 3 }),
     body('mensagem').optional().isString().trim().isLength({ min: 3 }),
     body('limit').optional().isInt({ min: 1, max: 10 }),
   ],
   validateRequest,
-  botCtrl.responderPerguntaRAQ
+  botCtrl.responderPerguntaRAG
 );
 
-// Debug/validacao do RAQ - mostra quais fontes seriam usadas
+// Debug/validacao do RAG - mostra quais fontes seriam usadas
 router.post(
   '/bot/contexto',
   [

@@ -36,7 +36,7 @@ async function iniciar() {
       console.log(`  POST   /api/v1/insumos`);
       console.log(`  POST   /api/v1/bot/webhook`);
       console.log(`  POST   /api/v1/bot/buscar`);
-      console.log(`  POST   /api/v1/bot/raq`);
+      console.log(`  POST   /api/v1/bot/rag`);
       console.log(`  POST   /api/v1/bot/contexto`);
       console.log(`  GET    /api/v1/bot/metricas`);
       console.log(`  GET    /api/v1/health`);
