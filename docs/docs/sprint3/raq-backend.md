@@ -73,14 +73,19 @@ Se `OPENAI_API_KEY` nao estiver configurada, o endpoint ainda consegue recuperar
 
 ## Como rodar para testar
 
-Para validar as respostas, use dois terminais.
+Para validar as respostas, e necessario usar **dois terminais do Git Bash** ao mesmo tempo:
 
-### Terminal 1: subir o servidor
+- **Terminal 1:** sobe o backend e deve permanecer aberto durante todo o teste;
+- **Terminal 2:** envia as requisicoes para validar o RAQ/RAG no banco e a resposta da OpenAI.
 
-No primeiro terminal, rode o backend e deixe o processo aberto:
+Nao feche o Terminal 1 enquanto estiver testando. O comando `npm.cmd run dev` deixa o servidor em execucao continua, entao esse terminal fica ocupado aguardando novas requisicoes.
 
-```powershell
-cd C:\Users\Inteli\Documents\2026_01_Agrominas\backend
+### Terminal 1: subir o servidor no Git Bash
+
+No primeiro terminal do Git Bash, rode o backend e deixe o processo aberto:
+
+```bash
+cd /c/Users/Inteli/Documents/2026_01_Agrominas/backend
 npm.cmd run dev
 ```
 
@@ -95,12 +100,14 @@ POST   /api/v1/bot/contexto
 
 Esse terminal precisa continuar rodando. Se ele for fechado, os testes no outro terminal nao vao funcionar.
 
-### Terminal 2: validar a API
+### Terminal 2: validar a API em outro Git Bash
+
+Abra um segundo terminal do Git Bash sem fechar o primeiro. E nele que os comandos de teste devem ser executados.
 
 No segundo terminal, primeiro teste se o servidor esta ativo:
 
-```powershell
-Invoke-RestMethod -Method GET -Uri "http://localhost:3000/api/v1/health"
+```bash
+curl "http://localhost:3000/api/v1/health"
 ```
 
 Resultado esperado:
@@ -133,6 +140,26 @@ $res | ConvertTo-Json -Depth 10
 ```
 
 Esse endpoint retorna os artigos encontrados, seus metadados e o `score` usado no ranking.
+
+### Validar contexto pelo Git Bash
+
+Com o servidor rodando no primeiro terminal, abra outro terminal no Git Bash e execute:
+
+```bash
+curl -X POST "http://localhost:3000/api/v1/bot/contexto" \
+  -H "Content-Type: application/json" \
+  -d '{"pergunta":"agricultura tropical regenerativa","limit":3}'
+```
+
+O corpo enviado no `-d` deve ser um JSON valido e terminar em `}`. Nao adicione `]` no final.
+
+Para facilitar a leitura, se o `jq` estiver instalado:
+
+```bash
+curl -s -X POST "http://localhost:3000/api/v1/bot/contexto" \
+  -H "Content-Type: application/json" \
+  -d '{"pergunta":"agricultura tropical regenerativa","limit":3}' | jq
+```
 
 ## Testar resposta final com OpenAI
 
@@ -173,8 +200,50 @@ O campo `modo` indica o estado da resposta:
 - `fallback_sem_openai_key`: o backend recuperou contexto, mas nao encontrou `OPENAI_API_KEY`;
 - `sem_contexto`: a rota funcionou, mas nao encontrou artigos relevantes no banco.
 
+### Validar resposta pelo Git Bash
+
+Com o servidor ainda rodando em outro terminal, execute no Git Bash:
+
+```bash
+curl -X POST "http://localhost:3000/api/v1/bot/raq" \
+  -H "Content-Type: application/json" \
+  -d '{"pergunta":"como usar biofertilizante no milho?","limit":3}'
+```
+
+Assim como no teste de contexto, o JSON enviado no `-d` deve terminar apenas com `}`.
+
+Versao formatada com `jq`:
+
+```bash
+curl -s -X POST "http://localhost:3000/api/v1/bot/raq" \
+  -H "Content-Type: application/json" \
+  -d '{"pergunta":"como usar biofertilizante no milho?","limit":3}' | jq
+```
+
+Tambem e possivel testar o webhook do bot:
+
+```bash
+curl -X POST "http://localhost:3000/api/v1/bot/webhook" \
+  -H "Content-Type: application/json" \
+  -d '{"mensagem":"o que e agricultura tropical regenerativa?","telefone":"5511999999999","plataforma":"mock"}'
+```
+
 ## Observacoes de teste
 
 Use `Invoke-RestMethod` no PowerShell em vez de `curl`, porque o `curl.exe` pode quebrar o JSON se as aspas nao forem escapadas corretamente.
+
+No Git Bash, o `curl` funciona melhor com JSON porque as aspas simples preservam o corpo da requisicao sem exigir escape adicional.
+
+Se aparecer o erro `Unexpected non-whitespace character after JSON`, verifique se o corpo enviado no `-d` nao ficou com algum caractere sobrando depois do JSON, por exemplo `]` no final:
+
+```text
+{"pergunta":"agricultura tropical regenerativa","limit":3}]
+```
+
+O correto e:
+
+```text
+{"pergunta":"agricultura tropical regenerativa","limit":3}
+```
 
 Se a resposta disser que nao ha informacao suficiente na base, isso nao significa erro no RAQ. Significa que os artigos recuperados nao trazem dados tecnicos suficientes para responder aquela pergunta sem inventar informacao.
