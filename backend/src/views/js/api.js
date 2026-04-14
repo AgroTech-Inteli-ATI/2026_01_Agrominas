@@ -2,7 +2,7 @@
 // Permite alternar entre modo real e mock para desenvolvimento
 
 const API_BASE_URL = 'http://localhost:3000/api/v1';
-const MOCK_MODE = true; // Mude para false quando o backend estiver rodando
+const MOCK_MODE = false; // Mude para true para usar dados simulados sem backend
 
 // Dados simulados para testes sem backend
 const MOCK_DATA = {
@@ -38,7 +38,7 @@ const MOCK_DATA = {
       atualizado_em: '2024-02-10',
       artigos_categorias: [{ categorias: { id: '1', nome: 'Agricultura Regenerativa' } }],
       artigos_insumos: [{ insumos_regenerativos: { id: '1', nome: 'Composto Orgânico' } }],
-      metadados_artigos: { cultura_agricola: 'Soja', regiao: 'Cerrado' }
+      metadados_artigos: { cultura: 'Soja', regiao: 'Cerrado' }
     },
     {
       id: '2',
@@ -53,7 +53,7 @@ const MOCK_DATA = {
       atualizado_em: '2024-02-15',
       artigos_categorias: [{ categorias: { id: '4', nome: 'Biodiversidade' } }],
       artigos_insumos: [{ insumos_regenerativos: { id: '2', nome: 'Biofertilizante' } }],
-      metadados_artigos: { cultura_agricola: 'Milho', regiao: 'Sul' }
+      metadados_artigos: { cultura: 'Milho', regiao: 'Sul' }
     },
     {
       id: '3',
@@ -68,7 +68,7 @@ const MOCK_DATA = {
       atualizado_em: '2024-02-20',
       artigos_categorias: [{ categorias: { id: '2', nome: 'Insumos Orgânicos' } }],
       artigos_insumos: [{ insumos_regenerativos: { id: '1', nome: 'Composto Orgânico' } }, { insumos_regenerativos: { id: '4', nome: 'Bokashi' } }],
-      metadados_artigos: { cultura_agricola: 'Hortaliças', regiao: 'Sudeste' }
+      metadados_artigos: { cultura: 'Hortaliças', regiao: 'Sudeste' }
     },
     {
       id: '4',
@@ -83,7 +83,7 @@ const MOCK_DATA = {
       atualizado_em: '2024-01-25',
       artigos_categorias: [{ categorias: { id: '3', nome: 'Manejo de Solo' } }],
       artigos_insumos: [{ insumos_regenerativos: { id: '3', nome: 'Calcário Dolomítico' } }],
-      metadados_artigos: { cultura_agricola: 'Pastagem', regiao: 'Centro-Oeste' }
+      metadados_artigos: { cultura: 'Pastagem', regiao: 'Centro-Oeste' }
     },
     {
       id: '5',
@@ -98,7 +98,7 @@ const MOCK_DATA = {
       atualizado_em: '2023-12-01',
       artigos_categorias: [{ categorias: { id: '1', nome: 'Agricultura Regenerativa' } }, { categorias: { id: '4', nome: 'Biodiversidade' } }],
       artigos_insumos: [],
-      metadados_artigos: { cultura_agricola: 'Café', regiao: 'Mata Atlântica' }
+      metadados_artigos: { cultura: 'Café', regiao: 'Mata Atlântica' }
     }
   ]
 };
@@ -257,6 +257,48 @@ class ApiService {
   getUsuario() {
     const usuario = localStorage.getItem('usuario');
     return usuario ? JSON.parse(usuario) : null;
+  }
+
+  // ─── UPLOAD / PROCESSAMENTO DE PDF ─────────────────────────────────────────
+
+  // Envia PDF para o backend e retorna metadados extraídos (sem salvar no banco)
+  async processarPDF(file) {
+    if (this.mockMode) {
+      await this.mockDelay(800);
+      const nome = file.name.replace(/\.pdf$/i, '').replace(/[-_]/g, ' ');
+      return {
+        data: {
+          titulo: nome,
+          resumo: null,
+          autor: null,
+          fonte: null,
+          conteudo: `[Conteúdo simulado do PDF: ${file.name}]`,
+          nome_arquivo: file.name,
+        },
+      };
+    }
+
+    const formData = new FormData();
+    formData.append('arquivo', file);
+
+    const token = this.getToken();
+    const response = await fetch(`${this.baseUrl}/artigos/processar-pdf`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        this.removeToken();
+        window.location.hash = '#/login';
+      }
+      throw new Error(data.error || 'Erro ao processar PDF');
+    }
+
+    return data;
   }
 
   // ─── ARTIGOS ────────────────────────────────────────────────────────────────

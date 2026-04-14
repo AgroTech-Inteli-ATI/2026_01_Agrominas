@@ -80,7 +80,7 @@ export const buscarArtigos = async (req, res, next) => {
         id, titulo, resumo, fonte,
         artigos_categorias (categorias (id, nome)),
         artigos_insumos (insumos_regenerativos (id, nome)),
-        metadados_artigos (cultura_agricola, nivel_evidencia, palavras_chave)
+        metadados_artigos (cultura, nivel_evidencia, palavras_chave)
       `
       )
       .eq('status', 'publicado')
@@ -105,7 +105,7 @@ export const buscarArtigos = async (req, res, next) => {
     }
     if (cultura) {
       resultado = resultado.filter((a) =>
-        a.metadados_artigos?.cultura_agricola?.toLowerCase().includes(cultura.toLowerCase())
+        a.metadados_artigos?.cultura?.toLowerCase().includes(cultura.toLowerCase())
       );
     }
 

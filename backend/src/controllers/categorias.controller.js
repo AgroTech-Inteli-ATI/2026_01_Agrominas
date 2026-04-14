@@ -5,7 +5,7 @@ export const listarCategorias = async (req, res, next) => {
   try {
     const { data, error } = await supabase
       .from('categorias')
-      .select('id, nome, descricao, criado_em')
+      .select('id, nome, descricao')
       .order('nome');
 
     if (error) return next(error);

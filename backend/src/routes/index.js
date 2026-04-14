@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { body, param, query } from 'express-validator';
+import multer from 'multer';
 
 import { authenticate, authorize } from '../middlewares/auth.middleware.js';
 import { validateRequest } from '../middlewares/error.middleware.js';
@@ -9,6 +10,19 @@ import * as artigosCtrl from '../controllers/artigos.controller.js';
 import * as categoriasCtrl from '../controllers/categorias.controller.js';
 import * as insumosCtrl from '../controllers/insumos.controller.js';
 import * as botCtrl from '../controllers/bot.controller.js';
+
+// Multer em memória — limite de 20 MB por arquivo, apenas PDFs
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Apenas arquivos PDF são aceitos.'));
+    }
+  },
+});
 
 const router = Router();
 
@@ -55,6 +69,14 @@ router.get(
 );
 
 router.get('/artigos/:id', authenticate, artigosCtrl.obterArtigo);
+
+// Processa PDF e retorna metadados sugeridos (sem salvar no banco)
+router.post(
+  '/artigos/processar-pdf',
+  authenticate,
+  upload.single('arquivo'),
+  artigosCtrl.processarPDF
+);
 
 router.post(
   '/artigos',
