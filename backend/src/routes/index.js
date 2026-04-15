@@ -167,6 +167,8 @@ router.post(
   botCtrl.recuperarContexto
 );
 
+router.post('/bot/pdf', upload.single('pdf'), botCtrl.receberPDF);
+
 // Métricas — apenas admins
 router.get('/bot/metricas', authenticate, authorize('admin'), botCtrl.obterMetricas);
 

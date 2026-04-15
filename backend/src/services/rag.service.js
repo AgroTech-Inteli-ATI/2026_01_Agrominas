@@ -45,6 +45,19 @@ export async function responderRAG(pergunta, opcoes = {}) {
   };
 }
 
+/**
+ * Retorna apenas a string de contexto formatada a partir da busca no banco.
+ */
+export async function obterContextoArtigos(pergunta, limite = 5) {
+  const candidatos = await buscarCandidatos();
+  const ranqueados = ranquearArtigos(candidatos, pergunta).slice(0, limite);
+  
+  return {
+    texto: montarContexto(ranqueados),
+    fontes: ranqueados.map(formatarFonte)
+  };
+}
+
 export async function recuperarContextoRAG(pergunta, opcoes = {}) {
   const limite = normalizarLimite(opcoes.limit);
   const candidatos = await buscarCandidatos();
