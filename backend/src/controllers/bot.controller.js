@@ -21,6 +21,7 @@ const MENUS = {
   CULTURA_BUSCA: "CULTURA_BUSCA",
   SOLO: "SOLO",
   AGUARDANDO_PDF: "AWAITING_PDF",
+  MOSTRAR_FONTES: "MOSTRAR_FONTES",
 };
 
 const MENSAGENS = {
@@ -234,11 +235,9 @@ export const receberMensagem = async (req, res, next) => {
       mensagemData?.documentMessage ||
       mensagemData?.documentWithCaptionMessage?.documentMessage;
 
-    if (!remoteJid) return;
-
     // 2. Gerenciamento de Sessão / Estado (Usando remoteJid completo como chave)
     if (!sessoes[remoteJid]) {
-      sessoes[remoteJid] = { estado: MENUS.PRINCIPAL, fallbacks: 0 };
+      sessoes[remoteJid] = { estado: MENUS.PRINCIPAL, fallbacks: 0, fontes: [] };
       await enviarMensagem(remoteJid, MENSAGENS.BOAS_VINDAS);
       return;
     }
@@ -257,6 +256,18 @@ export const receberMensagem = async (req, res, next) => {
     }
 
     let respostaTexto;
+
+    // --- MOSTRAR FONTES (Gatilho Global para quando a opção é exibida) ---
+    if (textoLimpo === "9") {
+        if (sessao.fontes && sessao.fontes.length > 0) {
+            const listaFontes = sessao.fontes.map((f, i) => `${i + 1}. *${f.titulo}*`).join('\n');
+            await enviarMensagem(remoteJid, `📚 *Fontes utilizadas:* \n\n${listaFontes}\n\n0️⃣ Voltar ao Menu Principal`);
+        } else {
+            await enviarMensagem(remoteJid, "Nenhuma fonte específica foi usada para a última resposta.\n\n0️⃣ Voltar ao Menu Principal");
+        }
+        sessao.estado = MENUS.PRINCIPAL;
+        return;
+    }
 
     // 3. Lógica da Máquina de Estados
 
@@ -302,7 +313,8 @@ export const receberMensagem = async (req, res, next) => {
 
       if (insumosMap[textoLimpo]) {
         const resultadoRAG = await responderRAG(insumosMap[textoLimpo]);
-        respostaTexto = `📋 *${insumosMap[textoLimpo]}*\n\n${resultadoRAG.resposta}\n\n1️⃣ Consultar outro insumo\n0️⃣ Voltar ao Menu Principal`;
+        sessao.fontes = resultadoRAG.fontes; // Salva fontes na sessão
+        respostaTexto = `📋 *${insumosMap[textoLimpo]}*\n\n${resultadoRAG.resposta}\n\n9️⃣ Ver fontes\n0️⃣ Voltar ao Menu Principal`;
       } else if (textoLimpo === "6") {
         sessao.estado = MENUS.INSUMOS_BUSCA;
         respostaTexto = MENSAGENS.BUSCA_LIVRE_INSUMO;
@@ -329,7 +341,8 @@ export const receberMensagem = async (req, res, next) => {
         if (resultadoRAG.modo === "sem_contexto") {
           respostaTexto = MENSAGENS.INSUMO_NAO_ENCONTRADO;
         } else {
-          respostaTexto = `📋 *Busca: ${mensagemOriginal}*\n\n${resultadoRAG.resposta}\n\n1️⃣ Consultar outro insumo\n0️⃣ Voltar ao Menu Principal`;
+          sessao.fontes = resultadoRAG.fontes; // Salva fontes na sessão
+          respostaTexto = `📋 *Busca: ${mensagemOriginal}*\n\n${resultadoRAG.resposta}\n\n9️⃣ Ver fontes\n0️⃣ Voltar ao Menu Principal`;
           sessao.estado = MENUS.INSUMOS;
         }
       }
@@ -350,7 +363,8 @@ export const receberMensagem = async (req, res, next) => {
         const resultadoRAG = await responderRAG(
           `insumos regenerativos para ${culturasMap[textoLimpo]}`,
         );
-        respostaTexto = `🌱 *Insumos Regenerativos para ${culturasMap[textoLimpo]}*\n\n${resultadoRAG.resposta}\n\n1️⃣ Escolher um insumo para aprofundar\n2️⃣ Consultar outra cultura\n0️⃣ Voltar ao Menu Principal`;
+        sessao.fontes = resultadoRAG.fontes; // Salva fontes na sessão
+        respostaTexto = `🌱 *Insumos Regenerativos para ${culturasMap[textoLimpo]}*\n\n${resultadoRAG.resposta}\n\n9️⃣ Ver fontes\n1️⃣ Escolher um insumo para aprofundar\n2️⃣ Consultar outra cultura\n0️⃣ Voltar ao Menu Principal`;
       } else if (textoLimpo === "7") {
         sessao.estado = MENUS.CULTURA_BUSCA;
         respostaTexto = MENSAGENS.BUSCA_LIVRE_CULTURA;
@@ -384,7 +398,8 @@ export const receberMensagem = async (req, res, next) => {
         if (resultadoRAG.modo === "sem_contexto") {
           respostaTexto = MENSAGENS.CULTURA_NAO_ENCONTRADA;
         } else {
-          respostaTexto = `🌱 *Recomendações para ${mensagemOriginal}*\n\n${resultadoRAG.resposta}\n\n1️⃣ Escolher um insumo para aprofundar\n2️⃣ Consultar outra cultura\n0️⃣ Voltar ao Menu Principal`;
+          sessao.fontes = resultadoRAG.fontes; // Salva fontes na sessão
+          respostaTexto = `🌱 *Recomendações para ${mensagemOriginal}*\n\n${resultadoRAG.resposta}\n\n9️⃣ Ver fontes\n1️⃣ Escolher um insumo para aprofundar\n2️⃣ Consultar outra cultura\n0️⃣ Voltar ao Menu Principal`;
           sessao.estado = MENUS.CULTURA;
         }
       }
@@ -402,9 +417,10 @@ export const receberMensagem = async (req, res, next) => {
 
       if (soloMap[textoLimpo]) {
         const resultadoRAG = await responderRAG(soloMap[textoLimpo]);
+        sessao.fontes = resultadoRAG.fontes; // Salva fontes na sessão
         respostaTexto =
           resultadoRAG.resposta +
-          "\n\n2️⃣ Consultar outro tema de solo\n0️⃣ Voltar ao Menu Principal";
+          "\n\n9️⃣ Ver fontes\n2️⃣ Consultar outro tema de solo\n0️⃣ Voltar ao Menu Principal";
       } else if (textoLimpo === "2") {
         respostaTexto = MENSAGENS.SUBMENU_SOLO;
       } else if (textoLimpo === "6") {
@@ -453,7 +469,8 @@ export const receberMensagem = async (req, res, next) => {
               contextoCientifico: contextoCientifico.texto,
             });
 
-            respostaTexto = `📊 *Análise do seu Laudo de Solo*\n\n${resultadoIA.texto}\n\n⚠️ *Aviso importante:* Estas são recomendações orientativas. Consulte sempre um agrônomo.\n\nDeseja saber mais?\n\n1️⃣ Sim, quero detalhes de um insumo\n2️⃣ Enviar outro laudo\n0️⃣ Voltar ao Menu Principal`;
+            sessao.fontes = contextoCientifico.fontes; // Salva fontes na sessão
+            respostaTexto = `📊 *Análise do seu Laudo de Solo*\n\n${resultadoIA.texto}\n\n9️⃣ Ver fontes\n\n⚠️ *Aviso importante:* Estas são recomendações orientativas. Consulte sempre um agrônomo.\n\nDeseja saber mais?\n\n1️⃣ Sim, quero detalhes de um insumo\n2️⃣ Enviar outro laudo\n0️⃣ Voltar ao Menu Principal`;
             sessao.estado = MENUS.SOLO;
           } catch (error) {
             console.error("[BOT] Erro ao processar PDF:", error);
@@ -462,6 +479,7 @@ export const receberMensagem = async (req, res, next) => {
           }
         }
       } else if (textoLimpo.length > 0) {
+        // Só responde se houver texto real enviado, ignorando eventos vazios
         if (textoLimpo === "0") {
           sessao.estado = MENUS.PRINCIPAL;
           respostaTexto = MENSAGENS.MENU_PRINCIPAL;
@@ -487,7 +505,7 @@ export const receberMensagem = async (req, res, next) => {
   }
 };
 
-// POST /bot/buscar  — busca direta de artigos para o bot
+// POST /bot/buscar — busca direta de artigos para o bot
 export const buscarArtigos = async (req, res, next) => {
   try {
     const { termo, categoria_id, insumo_id, cultura, limit = 5 } = req.body;
@@ -604,7 +622,7 @@ export const recuperarContexto = async (req, res, next) => {
   }
 };
 
-// GET /bot/metricas  — métricas básicas de uso (mock + dados reais de artigos)
+// GET /bot/metricas — métricas básicas de uso (mock + dados reais de artigos)
 export const obterMetricas = async (req, res, next) => {
   try {
     const [
