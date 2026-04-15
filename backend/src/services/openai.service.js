@@ -14,60 +14,8 @@ export async function gerarRespostaComOpenAI({ pergunta, contexto }) {
     };
   }
 
-  if (typeof fetch !== 'function') {
-    throw new Error('A versao do Node precisa ter fetch nativo para chamar a OpenAI.');
-  }
-
-  const input = `
-Você é um engenheiro agrônomo especialista em agricultura regenerativa.
-
-Responda de forma DIRETA, CURTA e PRÁTICA para produtores rurais.
-
-Priorize:
-- saúde do solo
-- aumento de matéria orgânica
-- biologia do solo
-- práticas regenerativas e sustentáveis
-
----
-
-ANÁLISE DE SOLO:
-{texto_analise}
-
-PERGUNTA DO PRODUTOR:
-{pergunta_produtor}
-
----
-
-Responda OBRIGATORIAMENTE neste formato:
-
-Diagnóstico:
-- Resuma em no máximo 2 linhas a situação do solo (incluindo visão química + biológica)
-
-O que fazer agora:
-- Liste ações práticas e diretas (bullet points)
-- Foque no que o produtor deve fazer imediatamente
-- Priorize soluções regenerativas e de baixo custo
-- Seja específico (ex: plantas, manejo, práticas)
-
-Quer saber mais?
-- Ofereça aprofundamento em 1 linha (ex: posso detalhar solo, nutrientes, biologia, etc.)
-
----
-
-REGRAS IMPORTANTES:
-- NÃO escrever textos longos
-- NÃO explicar tudo em detalhes por padrão
-- NÃO usar linguagem excessivamente técnica
-- NÃO criar várias seções
-- Priorizar clareza e ação
-
-Se não houver problema grave:
-- deixe isso claro no diagnóstico
-- ainda assim sugira melhorias simples
-
-Evite respostas genéricas.
-`;
+  // ✅ CORRIGIDO: substitui os placeholders dinamicamente
+  const input = montarPrompt(pergunta, contexto);
 
   const response = await fetch(OPENAI_API_URL, {
     method: 'POST',
@@ -96,6 +44,75 @@ Evite respostas genéricas.
     modelo: DEFAULT_MODEL,
     modo: 'openai',
   };
+}
+
+/**
+ * Gera resposta da IA usando o texto extraído de um PDF como análise de solo.
+ * Chamado quando o agricultor envia um laudo pelo WhatsApp.
+ *
+ * @param {string} pergunta - Pergunta do agricultor
+ * @param {string} textoPDF - Texto extraído do PDF
+ */
+export async function gerarRespostaComPDF({ pergunta, textoPDF }) {
+  return gerarRespostaComOpenAI({
+    pergunta,
+    contexto: textoPDF,
+  });
+}
+
+// ─── Helpers internos ─────────────────────────────────────────────────────────
+
+function montarPrompt(pergunta, contexto) {
+  const textoAnalise = contexto?.trim() || 'Nenhuma análise ou documento fornecido.';
+  const perguntaProdutor = pergunta?.trim() || 'O que devo fazer para melhorar meu solo?';
+
+  return `Você é um engenheiro agrônomo especialista em agricultura regenerativa.
+
+Responda de forma DIRETA, CURTA e PRÁTICA para produtores rurais.
+
+Priorize:
+- saúde do solo
+- aumento de matéria orgânica
+- biologia do solo
+- práticas regenerativas e sustentáveis
+
+---
+
+ANÁLISE DE SOLO:
+${textoAnalise}
+
+PERGUNTA DO PRODUTOR:
+${perguntaProdutor}
+
+---
+
+Responda OBRIGATORIAMENTE neste formato:
+
+Diagnóstico:
+- Resuma em no máximo 2 linhas a situação do solo (incluindo visão química + biológica)
+
+O que fazer agora:
+- Liste ações práticas e diretas (bullet points)
+- Foque no que o produtor deve fazer imediatamente
+- Priorize soluções regenerativas e de baixo custo
+- Seja específico (ex: plantas, manejo, práticas)
+
+Quer saber mais?
+- Ofereça aprofundamento em 1 linha (ex: posso detalhar solo, nutrientes, biologia, etc.)
+
+---
+
+REGRAS IMPORTANTES:
+- NÃO escrever textos longos
+- NÃO explicar tudo em detalhes por padrão
+- NÃO usar linguagem excessivamente técnica
+- Priorizar clareza e ação
+
+Se não houver problema grave:
+- deixe isso claro no diagnóstico
+- ainda assim sugira melhorias simples
+
+Evite respostas genéricas.`;
 }
 
 function extrairTextoDoPayload(payload) {

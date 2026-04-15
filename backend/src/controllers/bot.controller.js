@@ -1,5 +1,7 @@
 import { supabase } from '../config/supabase.js';
 import { responderRAG, recuperarContextoRAG } from '../services/rag.service.js';
+import { extrairTextoPDF } from '../services/pdf.service.js';
+import { gerarRespostaComPDF } from '../services/openai.service.js';
 
 // Palavras-chave mapeadas para filtros — base para evolução futura com NLP/IA
 const INTENCOES = {
@@ -239,3 +241,25 @@ async function buscarConteudo(termo) {
   const resultadoRAG = await responderRAG(termo, { limit: 3 });
   return resultadoRAG.resposta;
 }
+
+// POST /bot/pdf
+// Recebe PDF do agricultor e retorna interpretação da IA formatada para WhatsApp
+export const receberPDF = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Nenhum arquivo PDF enviado.' });
+    }
+
+    const pergunta = req.body?.pergunta || 'O que significa essa análise e o que devo fazer?';
+    const textoPDF = await extrairTextoPDF(req.file.buffer);
+    const resultado = await gerarRespostaComPDF({ pergunta, textoPDF });
+
+    res.json({
+      resposta: resultado.texto,
+      modelo: resultado.modelo,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
