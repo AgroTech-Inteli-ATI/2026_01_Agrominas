@@ -1,7 +1,7 @@
-import 'dotenv/config';
+import "dotenv/config";
 
-const OPENAI_API_URL = 'https://api.openai.com/v1/responses';
-const DEFAULT_MODEL = process.env.OPENAI_MODEL || 'gpt-5.4';
+const OPENAI_API_URL = "https://api.openai.com/v1/responses";
+const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-5.4";
 
 export async function gerarRespostaComOpenAI({ pergunta, contexto }) {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -10,18 +10,17 @@ export async function gerarRespostaComOpenAI({ pergunta, contexto }) {
     return {
       texto: null,
       modelo: null,
-      modo: 'fallback_sem_openai_key',
+      modo: "fallback_sem_openai_key",
     };
   }
 
-  // ✅ CORRIGIDO: substitui os placeholders dinamicamente
   const input = montarPrompt(pergunta, contexto);
 
   const response = await fetch(OPENAI_API_URL, {
-    method: 'POST',
+    method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       model: DEFAULT_MODEL,
@@ -33,7 +32,8 @@ export async function gerarRespostaComOpenAI({ pergunta, contexto }) {
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    const message = payload?.error?.message || 'Erro ao gerar resposta com a OpenAI.';
+    const message =
+      payload?.error?.message || "Erro ao gerar resposta com a OpenAI.";
     const error = new Error(message);
     error.status = response.status;
     throw error;
@@ -42,33 +42,54 @@ export async function gerarRespostaComOpenAI({ pergunta, contexto }) {
   return {
     texto: payload.output_text || extrairTextoDoPayload(payload),
     modelo: DEFAULT_MODEL,
-    modo: 'openai',
+    modo: "openai",
   };
 }
 
 /**
- * Gera resposta da IA usando o texto extraído de um PDF como análise de solo.
- * Chamado quando o agricultor envia um laudo pelo WhatsApp.
+ * Gera resposta da IA usando o texto extraído de um PDF como análise de solo
+ * e opcionalmente contexto científico do banco de dados.
  *
- * @param {string} pergunta - Pergunta do agricultor
- * @param {string} textoPDF - Texto extraído do PDF
+ * @param {Object} params
+ * @param {string} params.pergunta - Pergunta do agricultor
+ * @param {string} params.textoPDF - Texto extraído do PDF
+ * @param {string} [params.contextoCientifico] - Contexto recuperado do banco
  */
-export async function gerarRespostaComPDF({ pergunta, textoPDF }) {
+export async function gerarRespostaComPDF({
+  pergunta,
+  textoPDF,
+  contextoCientifico,
+}) {
   return gerarRespostaComOpenAI({
     pergunta,
     contexto: textoPDF,
+    contextoCientifico,
   });
 }
 
 // ─── Helpers internos ─────────────────────────────────────────────────────────
 
-function montarPrompt(pergunta, contexto) {
-  const textoAnalise = contexto?.trim() || 'Nenhuma análise ou documento fornecido.';
-  const perguntaProdutor = pergunta?.trim() || 'O que devo fazer para melhorar meu solo?';
+function montarPrompt(pergunta, contexto, contextoCientifico = null) {
+  const textoAnalise =
+    contexto?.trim() || "Nenhuma análise ou documento fornecido.";
+  const perguntaProdutor =
+    pergunta?.trim() || "O que devo fazer para melhorar meu solo?";
 
-  return `Você é um engenheiro agrônomo especialista em agricultura regenerativa.
+  let blocoCientifico = "";
+  if (contextoCientifico) {
+    blocoCientifico = `
+---
+BASE DE CONHECIMENTO CIENTÍFICO (Artigos Técnicos):
+${contextoCientifico}
+---
+`;
+  }
 
-Responda de forma DIRETA, CURTA e PRÁTICA para produtores rurais.
+  return `Você é um engenheiro agrônomo especialista em agricultura regenerativa da Agrominas.
+
+Sua tarefa é analisar os dados do agricultor e fornecer recomendações baseadas em princípios regenerativos e na base de conhecimento científico fornecida.
+
+Responda de forma DIRETA, CURTA e PRÁTICA.
 
 Priorize:
 - saúde do solo
@@ -77,9 +98,9 @@ Priorize:
 - práticas regenerativas e sustentáveis
 
 ---
-
-ANÁLISE DE SOLO:
+DADOS DA ANÁLISE DE SOLO DO AGRICULTOR:
 ${textoAnalise}
+${blocoCientifico}
 
 PERGUNTA DO PRODUTOR:
 ${perguntaProdutor}
@@ -90,12 +111,13 @@ Responda OBRIGATORIAMENTE neste formato:
 
 Diagnóstico:
 - Resuma em no máximo 2 linhas a situação do solo (incluindo visão química + biológica)
+- Se houver conflito entre os dados e a ciência, priorize a segurança do solo.
 
 O que fazer agora:
 - Liste ações práticas e diretas (bullet points)
+- Use os nomes dos insumos ou técnicas citados na BASE DE CONHECIMENTO CIENTÍFICO se forem aplicáveis.
 - Foque no que o produtor deve fazer imediatamente
 - Priorize soluções regenerativas e de baixo custo
-- Seja específico (ex: plantas, manejo, práticas)
 
 Quer saber mais?
 - Ofereça aprofundamento em 1 linha (ex: posso detalhar solo, nutrientes, biologia, etc.)
@@ -108,10 +130,6 @@ REGRAS IMPORTANTES:
 - NÃO usar linguagem excessivamente técnica
 - Priorizar clareza e ação
 
-Se não houver problema grave:
-- deixe isso claro no diagnóstico
-- ainda assim sugira melhorias simples
-
 Evite respostas genéricas.`;
 }
 
@@ -121,5 +139,5 @@ function extrairTextoDoPayload(payload) {
     ?.map((content) => content.text)
     ?.filter(Boolean);
 
-  return partes?.join('\n').trim() || '';
+  return partes?.join("\n").trim() || "";
 }

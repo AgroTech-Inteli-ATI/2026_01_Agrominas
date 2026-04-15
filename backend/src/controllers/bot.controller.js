@@ -1,5 +1,5 @@
 import { supabase } from '../config/supabase.js';
-import { responderRAG, recuperarContextoRAG } from '../services/rag.service.js';
+import { responderRAG, recuperarContextoRAG, obterContextoArtigos } from '../services/rag.service.js';
 import { extrairTextoPDF } from '../services/pdf.service.js';
 import { gerarRespostaComPDF } from '../services/openai.service.js';
 
@@ -243,7 +243,7 @@ async function buscarConteudo(termo) {
 }
 
 // POST /bot/pdf
-// Recebe PDF do agricultor e retorna interpretação da IA formatada para WhatsApp
+// Recebe PDF do agricultor e retorna interpretação da IA fundamentada na base científica
 export const receberPDF = async (req, res, next) => {
   try {
     if (!req.file) {
@@ -251,12 +251,25 @@ export const receberPDF = async (req, res, next) => {
     }
 
     const pergunta = req.body?.pergunta || 'O que significa essa análise e o que devo fazer?';
+    
+    // 1. Extrai o texto do PDF do agricultor
     const textoPDF = await extrairTextoPDF(req.file.buffer);
-    const resultado = await gerarRespostaComPDF({ pergunta, textoPDF });
+
+    // 2. Busca o contexto científico relacionado à pergunta no banco de dados
+    const contextoCientifico = await obterContextoArtigos(pergunta, 3);
+
+    // 3. Gera a resposta final combinando os dois contextos
+    const resultado = await gerarRespostaComPDF({ 
+      pergunta, 
+      textoPDF, 
+      contextoCientifico: contextoCientifico.texto 
+    });
 
     res.json({
+      pergunta,
       resposta: resultado.texto,
       modelo: resultado.modelo,
+      fontes: contextoCientifico.fontes, // Mostra quais artigos científicos fundamentaram a resposta
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
