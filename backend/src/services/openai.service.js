@@ -3,7 +3,7 @@ import "dotenv/config";
 const OPENAI_API_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-5.4";
 
-export async function gerarRespostaComOpenAI({ pergunta, contexto }) {
+export async function gerarRespostaComOpenAI({ pergunta, contexto, contextoCientifico }) {
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
@@ -14,7 +14,7 @@ export async function gerarRespostaComOpenAI({ pergunta, contexto }) {
     };
   }
 
-  const input = montarPrompt(pergunta, contexto);
+  const input = montarPrompt(pergunta, contexto, contextoCientifico);
 
   const response = await fetch(OPENAI_API_URL, {
     method: "POST",
