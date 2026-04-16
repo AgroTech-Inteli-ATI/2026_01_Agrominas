@@ -39,6 +39,12 @@ async function iniciar() {
       console.log(`  POST   /api/v1/bot/rag`);
       console.log(`  POST   /api/v1/bot/contexto`);
       console.log(`  GET    /api/v1/bot/metricas`);
+      console.log(`  GET    /api/v1/admin/perguntas`);
+      console.log(`  POST   /api/v1/admin/perguntas`);
+      console.log(`  PUT    /api/v1/admin/perguntas/:id`);
+      console.log(`  DELETE /api/v1/admin/perguntas/:id`);
+      console.log(`  GET    /api/v1/admin/dashboard/perguntas`);
+      console.log(`  GET    /api/v1/admin/artigos/historico`);
       console.log(`  GET    /api/v1/health`);
     });
   } catch (err) {
