@@ -72,6 +72,8 @@ export function renderLayout(content, activePage = 'home') {
              href="#/home">Adicionar</a>
           <a class="header__nav-link ${activePage === 'consulta' ? 'header__nav-link--active' : ''}" 
              href="#/consulta">Consultar</a>
+           <a class="header__nav-link ${activePage === 'gestao-bot' ? 'header__nav-link--active' : ''}" 
+             href="#/gestao-bot">Gestão do Bot</a>
         </nav>
         <div class="header__user">
           <span class="header__user-name">${usuario.nome || 'Usuário'}</span>
