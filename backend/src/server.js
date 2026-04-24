@@ -18,7 +18,7 @@ async function iniciar() {
     await verificarConexao();
 
     app.listen(PORT, () => {
-      console.log(`🚀 Servidor rodando em http://localhost:${PORT}/api/v1`);
+      console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
       console.log(`📋 Ambiente: ${process.env.NODE_ENV || 'development'}`);
       console.log(`\nRotas disponíveis:`);
       console.log(`  POST   /api/v1/auth/login`);
