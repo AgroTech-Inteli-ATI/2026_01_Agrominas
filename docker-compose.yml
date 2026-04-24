@@ -41,6 +41,27 @@ services:
       - CACHE_REDIS_ENABLED=true
       - CACHE_REDIS_URI=redis://redis:6379/6
       - CACHE_REDIS_PREFIX_KEY=evolution
+      - WEBHOOK_GLOBAL_ENABLED=false
+      - WEBHOOK_GLOBAL_URL=
+      - WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS=false
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: agrominas_backend
+    restart: always
+    depends_on:
+      - evolution
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - PORT=3000
+      - EVOLUTION_URL=http://evolution:8080
+      - EVOLUTION_INSTANCE=${EVOLUTION_INSTANCE:-agrominas}
+      - EVOLUTION_WEBHOOK_URL=http://backend:3000/api/v1/bot/webhook
 
 volumes:
   postgres_data:
