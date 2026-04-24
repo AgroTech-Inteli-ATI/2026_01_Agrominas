@@ -1,8 +1,19 @@
 import 'dotenv/config';
 
 const EVOLUTION_API_URL = process.env.EVOLUTION_URL || 'http://localhost:8081';
-const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || '422470c0-669a-4d5a-82e4-a15d08d9512d';
+const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY;
 const INSTANCE_NAME = process.env.EVOLUTION_INSTANCE || 'agrominas';
+
+function getEvolutionHeaders() {
+  if (!EVOLUTION_API_KEY) {
+    throw new Error('EVOLUTION_API_KEY nao configurada no ambiente.');
+  }
+
+  return {
+    'Content-Type': 'application/json',
+    apikey: EVOLUTION_API_KEY,
+  };
+}
 
 /**
  * Envia uma mensagem de texto simples via Evolution API
@@ -13,10 +24,7 @@ export async function enviarMensagem(to, text) {
   try {
     const response = await fetch(`${EVOLUTION_API_URL}/message/sendText/${INSTANCE_NAME}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': EVOLUTION_API_KEY
-      },
+      headers: getEvolutionHeaders(),
       body: JSON.stringify({
         number: to,
         text: text
@@ -46,10 +54,7 @@ export async function baixarMidia(message) {
     // Corrigido: endpoint correto é /chat/ em vez de /message/
     const response = await fetch(`${EVOLUTION_API_URL}/chat/getBase64FromMediaMessage/${INSTANCE_NAME}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': EVOLUTION_API_KEY
-      },
+      headers: getEvolutionHeaders(),
       body: JSON.stringify({
         message: message
       })
