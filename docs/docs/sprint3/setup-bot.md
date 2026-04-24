@@ -45,6 +45,17 @@ OPENAI_API_KEY=SUA_CHAVE_DE_API_DA_OPENAI
 # Evolution API (WhatsApp) - Configuração padrão do Docker Compose
 EVOLUTION_URL=http://localhost:8081
 EVOLUTION_API_KEY=SUA_CHAVE_SECRETA_PARA_EVOLUTION_API # Pode ser qualquer string segura
+EVOLUTION_INSTANCE=agrominas
+EVOLUTION_WEBHOOK_URL=http://backend:3000/api/v1/bot/webhook
+WHATSAPP_OWNER_NUMBER=55DDDNUMERO
+
+# Banco interno da Evolution API no Docker
+DATABASE_ENABLED=true
+DATABASE_PROVIDER=postgresql
+DATABASE_CONNECTION_URI=postgresql://evolution:evolution123@postgres:5432/evolution?schema=public
+DATABASE_SAVE_DATA_INSTANCE=true
+DATABASE_SAVE_DATA_NEW_MESSAGE=true
+WEBHOOK_GLOBAL_ENABLED=false
 ```
 
 ### Passo 3: Configurar o Banco de Dados (Supabase)
@@ -74,10 +85,16 @@ O `docker-compose.yml` na raiz do projeto foi configurado para iniciar o backend
 
 A Evolution API possui uma interface visual para facilitar o gerenciamento das instâncias.
 
+Antes de abrir o QR Code, execute o script abaixo para criar a instância `agrominas` e configurar o webhook do backend:
+
+```bash
+npm --prefix backend run whatsapp:setup
+```
+
 1.  **Acesse o Gerenciador**: Abra o navegador e vá para `http://localhost:8081/manager`.
 2.  **Login**: Utilize a `EVOLUTION_API_KEY` que você configurou no seu arquivo `.env` para entrar.
 3.  **Crie uma Instância**:
-    - Clique em "Nova Instância" ou "Create Instance".
+    - Se o script acima ainda não criou, clique em "Nova Instância" ou "Create Instance".
     - Dê o nome de `agrominas` para a instância (conforme configurado no backend).
     - Certifique-se de que a opção de QR Code está ativada.
 4.  **Conectar via QR Code**:
@@ -87,8 +104,8 @@ A Evolution API possui uma interface visual para facilitar o gerenciamento das i
 5.  **Configurar Webhook**:
     - Dentro das configurações da instância no manager, vá na aba "Webhook".
     - Ative o Webhook.
-    - Configure a URL para: `http://host.docker.internal:3000/api/v1/bot/webhook` (ou o IP da sua máquina na rede local).
-    - Selecione o evento `MESSAGES_UPSERT`.
+    - Configure a URL para: `http://backend:3000/api/v1/bot/webhook`.
+    - Selecione os eventos `MESSAGES_UPSERT`, `CONNECTION_UPDATE` e `QRCODE_UPDATED`.
 
 Pronto! Seu bot está oficialmente conectado e pronto para receber mensagens.
 
