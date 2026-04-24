@@ -16,10 +16,21 @@ const SELECT_ARTIGOS_RAG = `
 
 export async function responderRAG(pergunta, opcoes = {}) {
   const limite = normalizarLimite(opcoes.limit);
-  const candidatos = await buscarCandidatos();
-  const ranqueados = ranquearArtigos(candidatos, pergunta).slice(0, limite);
 
-  if (!ranqueados.length) {
+  const [candidatosArtigos, candidatosVideos] = await Promise.all([
+    buscarCandidatos(),
+    buscarCandidatosVideos(),
+  ]);
+
+  const artigosRanqueados = ranquearArtigos(candidatosArtigos, pergunta);
+  const videosRanqueados = ranquearVideos(candidatosVideos, pergunta);
+
+  // Mescla e ordena por score, respeitando o limite total
+  const todos = [...artigosRanqueados, ...videosRanqueados]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limite);
+
+  if (!todos.length) {
     return {
       resposta: `Nao encontrei informacoes na base de conhecimento para responder sobre "${pergunta}". Tente informar o nome do insumo, cultura ou pratica agricola.`,
       modo: 'sem_contexto',
@@ -29,43 +40,75 @@ export async function responderRAG(pergunta, opcoes = {}) {
     };
   }
 
-  const contexto = montarContexto(ranqueados);
+  const contexto = todos
+    .map((item, i) =>
+      item._tipo === 'video' ? montarContextoVideo(item, i) : montarContexto([item]).replace('Fonte 1', `Fonte ${i + 1}`),
+    )
+    .join('\n\n---\n\n');
+
   const respostaIA = await gerarRespostaComOpenAI({ pergunta, contexto });
 
   return {
-    resposta: respostaIA.texto || gerarRespostaFallback(pergunta, ranqueados),
+    resposta: respostaIA.texto || gerarRespostaFallback(pergunta, todos.filter((i) => i._tipo !== 'video')),
     modo: respostaIA.modo,
     modelo: respostaIA.modelo,
-    fontes: ranqueados.map(formatarFonte),
-    contexto_usado: ranqueados.map((artigo) => ({
-      id: artigo.id,
-      titulo: artigo.titulo,
-      score: artigo.score,
+    fontes: todos.map((item) => (item._tipo === 'video' ? formatarFonteVideo(item) : formatarFonte(item))),
+    contexto_usado: todos.map((item) => ({
+      id: item.id,
+      titulo: item.titulo,
+      score: item.score,
+      tipo: item._tipo === 'video' ? 'video' : 'artigo',
     })),
   };
 }
 
 /**
  * Retorna apenas a string de contexto formatada a partir da busca no banco.
+ * Inclui artigos e vídeos.
  */
 export async function obterContextoArtigos(pergunta, limite = 5) {
-  const candidatos = await buscarCandidatos();
-  const ranqueados = ranquearArtigos(candidatos, pergunta).slice(0, limite);
-  
+  const [candidatosArtigos, candidatosVideos] = await Promise.all([
+    buscarCandidatos(),
+    buscarCandidatosVideos(),
+  ]);
+
+  const todos = [
+    ...ranquearArtigos(candidatosArtigos, pergunta),
+    ...ranquearVideos(candidatosVideos, pergunta),
+  ]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limite);
+
+  const texto = todos
+    .map((item, i) =>
+      item._tipo === 'video' ? montarContextoVideo(item, i) : montarContexto([item]).replace('Fonte 1', `Fonte ${i + 1}`),
+    )
+    .join('\n\n---\n\n');
+
   return {
-    texto: montarContexto(ranqueados),
-    fontes: ranqueados.map(formatarFonte)
+    texto,
+    fontes: todos.map((item) => (item._tipo === 'video' ? formatarFonteVideo(item) : formatarFonte(item))),
   };
 }
 
 export async function recuperarContextoRAG(pergunta, opcoes = {}) {
   const limite = normalizarLimite(opcoes.limit);
-  const candidatos = await buscarCandidatos();
-  const ranqueados = ranquearArtigos(candidatos, pergunta).slice(0, limite);
+
+  const [candidatosArtigos, candidatosVideos] = await Promise.all([
+    buscarCandidatos(),
+    buscarCandidatosVideos(),
+  ]);
+
+  const todos = [
+    ...ranquearArtigos(candidatosArtigos, pergunta),
+    ...ranquearVideos(candidatosVideos, pergunta),
+  ]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limite);
 
   return {
-    total: ranqueados.length,
-    contexto: ranqueados.map(formatarFonte),
+    total: todos.length,
+    contexto: todos.map((item) => (item._tipo === 'video' ? formatarFonteVideo(item) : formatarFonte(item))),
   };
 }
 
@@ -78,6 +121,68 @@ async function buscarCandidatos() {
 
   if (error) throw error;
   return data || [];
+}
+
+async function buscarCandidatosVideos() {
+  const { data, error } = await supabase
+    .from('videos')
+    .select('id, titulo, resumo, url_youtube, canal')
+    .eq('status', 'publicado')
+    .limit(50);
+
+  // Tabela pode não existir ainda (migration pendente) — não quebra o RAG de artigos
+  if (error) {
+    console.warn('[RAG] videos indisponivel:', error.message);
+    return [];
+  }
+  return (data || []).map((v) => ({ ...v, _tipo: 'video' }));
+}
+
+function ranquearVideos(videos, pergunta) {
+  const perguntaNormalizada = normalizarTexto(pergunta);
+  const termos = extrairTermos(pergunta);
+
+  return videos
+    .map((video) => {
+      const titulo = normalizarTexto(video.titulo || '');
+      const resumo = normalizarTexto(video.resumo || '');
+
+      let score = 0;
+      if (perguntaNormalizada && titulo.includes(perguntaNormalizada)) score += 12;
+      if (perguntaNormalizada && resumo.includes(perguntaNormalizada)) score += 8;
+
+      for (const termo of termos) {
+        if (titulo.includes(termo)) score += 5;
+        if (resumo.includes(termo)) score += 3;
+      }
+
+      return { ...video, score };
+    })
+    .filter((v) => v.score > 0)
+    .sort((a, b) => b.score - a.score);
+}
+
+function montarContextoVideo(video, index) {
+  return [
+    `Fonte ${index + 1} (Vídeo)`,
+    `ID: ${video.id}`,
+    `Título: ${video.titulo}`,
+    `Canal: ${video.canal || 'não informado'}`,
+    `Resumo: ${limitarTexto(video.resumo || '', 1600)}`,
+    `Link: ${video.url_youtube}`,
+  ].join('\n');
+}
+
+function formatarFonteVideo(video) {
+  return {
+    id: video.id,
+    titulo: video.titulo,
+    resumo: video.resumo,
+    fonte: video.url_youtube,
+    canal: video.canal,
+    score: video.score,
+    tipo: 'video',
+  };
 }
 
 function ranquearArtigos(artigos, pergunta) {

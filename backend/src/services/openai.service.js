@@ -47,6 +47,57 @@ export async function gerarRespostaComOpenAI({ pergunta, contexto, contextoCient
 }
 
 /**
+ * Resume a transcrição de um vídeo do YouTube em conteúdo técnico agrícola.
+ * O resumo é otimizado para uso como fonte de conhecimento no RAG.
+ *
+ * @param {string} titulo - Título do vídeo
+ * @param {string} transcricao - Transcrição completa do vídeo
+ * @returns {Promise<string>} Resumo técnico gerado pela IA
+ */
+export async function resumirTranscricao(titulo, transcricao) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY não configurada no .env');
+
+  const response = await fetch(OPENAI_API_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: DEFAULT_MODEL,
+      input: `Você é um assistente especialista em agricultura regenerativa da Agrominas.
+
+Abaixo está a transcrição de um vídeo educativo intitulado "${titulo}".
+
+Sua tarefa é criar um resumo técnico e objetivo do conteúdo, com foco em:
+- Práticas e técnicas agrícolas mencionadas
+- Insumos regenerativos citados (nomes, benefícios, modo de uso)
+- Culturas e tipos de solo abordados
+- Recomendações práticas para produtores rurais
+
+O resumo será usado como base de conhecimento para responder perguntas de agricultores via WhatsApp, portanto deve ser rico em termos técnicos e nomes específicos de insumos.
+
+TRANSCRIÇÃO:
+${transcricao.slice(0, 12000)}
+
+Escreva o resumo em português, com no máximo 800 palavras, de forma clara e objetiva. Não use introdução — vá direto ao conteúdo técnico.`,
+      max_output_tokens: 1200,
+    }),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = payload?.error?.message || 'Erro ao gerar resumo com OpenAI.';
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
+  }
+
+  return payload.output_text || extrairTextoDoPayload(payload);
+}
+
+/**
  * Gera resposta da IA usando o texto extraído de um PDF como análise de solo
  * e opcionalmente contexto científico do banco de dados.
  *
