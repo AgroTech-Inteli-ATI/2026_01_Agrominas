@@ -7,6 +7,7 @@ export async function gerarRespostaComOpenAI({
   pergunta,
   contexto,
   contextoCientifico,
+  contextoVideos,
   tipo = "geral",
 }) {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -19,7 +20,7 @@ export async function gerarRespostaComOpenAI({
     };
   }
 
-  const input = montarPrompt(pergunta, contexto, contextoCientifico, tipo);
+  const input = montarPrompt(pergunta, contexto, contextoCientifico, contextoVideos, tipo);
 
   const response = await fetch(OPENAI_API_URL, {
     method: "POST",
@@ -64,106 +65,107 @@ export async function gerarRespostaComPDF({
   pergunta,
   textoPDF,
   contextoCientifico,
+  contextoVideos,
 }) {
   return gerarRespostaComOpenAI({
     pergunta,
     contexto: textoPDF,
     contextoCientifico,
+    contextoVideos,
     tipo: "laudo_solo",
   });
 }
 
 // ─── Helpers internos ─────────────────────────────────────────────────────────
 
-function montarPrompt(pergunta, contexto, contextoCientifico = null, tipo = "geral") {
+function montarPrompt(pergunta, contexto, contextoCientifico = null, contextoVideos = null, tipo = "geral") {
   if (tipo === "laudo_solo") {
-    return montarPromptLaudoSolo(pergunta, contexto, contextoCientifico);
+    return montarPromptLaudoSolo(pergunta, contexto, contextoCientifico, contextoVideos);
   }
 
-  return montarPromptGeral(pergunta, contexto, contextoCientifico);
+  return montarPromptGeral(pergunta, contexto, contextoCientifico, contextoVideos);
 }
 
-function montarPromptGeral(pergunta, contexto, contextoCientifico = null) {
-  const contextoBase =
-    contexto?.trim() || "Nenhum contexto encontrado na base de conhecimento.";
-  const perguntaProdutor =
-    pergunta?.trim() || "Qual orientacao regenerativa voce recomenda?";
+function blocoVideosContexto(contextoVideos) {
+  if (!contextoVideos || !String(contextoVideos).trim()) return "";
+  return `
+---
+VÍDEOS DE APOIO (transcrições e resumos):
+${contextoVideos}
+---
+`;
+}
 
-  let blocoCientifico = "";
-  if (contextoCientifico) {
-    blocoCientifico = `
+function blocoCientificoContexto(contextoCientifico) {
+  if (!contextoCientifico || !String(contextoCientifico).trim()) return "";
+  return `
 ---
 BASE DE CONHECIMENTO COMPLEMENTAR:
 ${contextoCientifico}
 ---
 `;
-  }
+}
 
-  return `Voce e um assistente tecnico da Agrominas especializado em agricultura regenerativa.
+function montarPromptGeral(pergunta, contexto, contextoCientifico = null, contextoVideos = null) {
+  const contextoBase =
+    contexto?.trim() || "Nenhum contexto encontrado na base de conhecimento.";
+  const perguntaProdutor =
+    pergunta?.trim() || "Qual orientação regenerativa você recomenda?";
 
-Responda a pergunta do produtor usando apenas a base de conhecimento fornecida. A resposta deve ser direta, curta e pratica para WhatsApp.
+  return `Você é o assistente da Agrominas no WhatsApp, conversando com um produtor rural sobre agricultura regenerativa.
 
-Nao use o formato "Diagnostico" nesta resposta. Esse formato e reservado apenas para analise de laudo de solo/PDF.
+Fale como um amigo agrônomo: acolhedor, próximo, em linguagem simples, sem termos técnicos pesados. Pode usar 1 ou 2 emojis quando fizer sentido (🌱 🌾 👍), sem exagerar. Trate o produtor por "você".
+
+Use apenas a base de conhecimento abaixo (artigos e vídeos). Não invente nada que não esteja ali.
+
+Não use o formato "Diagnóstico" — esse formato é só para laudo de solo em PDF.
 
 ---
-BASE DE CONHECIMENTO:
+BASE DE CONHECIMENTO (Artigos):
 ${contextoBase}
-${blocoCientifico}
-
+${blocoCientificoContexto(contextoCientifico)}${blocoVideosContexto(contextoVideos)}
 PERGUNTA DO PRODUTOR:
 ${perguntaProdutor}
 
 ---
 
-Responda neste formato:
+Responda neste formato (sem incluir as palavras "Orientação:" e "O que fazer agora:" se ficar mais natural sem elas, mas mantenha a ordem):
 
-Orientacao:
-- Explique a recomendacao principal em linguagem simples.
+Orientação:
+- 1 a 3 frases curtas explicando o ponto principal, em tom de conversa.
 
 O que fazer agora:
-- Liste de 2 a 4 acoes praticas.
-- Cite insumos, culturas ou tecnicas da base quando forem relevantes.
+- 2 a 4 ações práticas em bullets curtos.
+- Cite insumos, culturas ou técnicas da base quando ajudarem.
+- Se algum vídeo da base reforçar a recomendação, mencione "(tem um vídeo sobre isso nas referências abaixo)" no bullet correspondente.
 
 REGRAS:
-- Nao inventar informacoes fora da base.
-- Nao escrever texto longo.
-- Nao usar linguagem excessivamente tecnica.
-- Nao mencionar "diagnostico do solo" a menos que o usuario tenha enviado um laudo/PDF.`;
+- Não invente informações fora da base.
+- Texto curto, fácil de ler no celular.
+- Não use jargão técnico sem explicar.
+- NÃO escreva o bloco de "Referências" — ele é gerado automaticamente depois da sua resposta. Apenas escreva o corpo da resposta.`;
 }
 
-function montarPromptLaudoSolo(pergunta, contexto, contextoCientifico = null) {
+function montarPromptLaudoSolo(pergunta, contexto, contextoCientifico = null, contextoVideos = null) {
   const textoAnalise =
     contexto?.trim() || "Nenhuma análise ou documento fornecido.";
   const perguntaProdutor =
     pergunta?.trim() || "O que devo fazer para melhorar meu solo?";
 
-  let blocoCientifico = "";
-  if (contextoCientifico) {
-    blocoCientifico = `
----
-BASE DE CONHECIMENTO CIENTÍFICO (Artigos Técnicos):
-${contextoCientifico}
----
-`;
-  }
+  return `Você é o agrônomo da Agrominas conversando pelo WhatsApp com um produtor que acabou de mandar o laudo de solo dele.
 
-  return `Você é um engenheiro agrônomo especialista em agricultura regenerativa da Agrominas.
+Fale de forma acolhedora e próxima, como quem está ao lado dele explicando o resultado. Linguagem simples, frases curtas, 1 ou 2 emojis se fizer sentido (🌱 🌍 👍). Trate por "você".
 
-Sua tarefa é analisar os dados do agricultor e fornecer recomendações baseadas em princípios regenerativos e na base de conhecimento científico fornecida.
-
-Responda de forma DIRETA, CURTA e PRÁTICA.
-
-Priorize:
+Apoie a análise nos princípios regenerativos e na base científica/vídeos abaixo. Priorize:
 - saúde do solo
-- aumento de matéria orgânica
+- matéria orgânica
 - biologia do solo
-- práticas regenerativas e sustentáveis
+- soluções regenerativas e de baixo custo
 
 ---
 DADOS DA ANÁLISE DE SOLO DO AGRICULTOR:
 ${textoAnalise}
-${blocoCientifico}
-
+${blocoCientificoContexto(contextoCientifico)}${blocoVideosContexto(contextoVideos)}
 PERGUNTA DO PRODUTOR:
 ${perguntaProdutor}
 
@@ -172,24 +174,20 @@ ${perguntaProdutor}
 Responda OBRIGATORIAMENTE neste formato:
 
 Diagnóstico:
-- Resuma em no máximo 2 linhas a situação do solo (incluindo visão química + biológica)
-- Se houver conflito entre os dados e a ciência, priorize a segurança do solo.
+- 1 a 2 linhas resumindo a situação do solo (química + biológica).
+- Em caso de conflito entre os dados e a ciência, priorize a segurança do solo.
 
 O que fazer agora:
-- Liste ações práticas e diretas (bullet points)
-- Use os nomes dos insumos ou técnicas citados na BASE DE CONHECIMENTO CIENTÍFICO se forem aplicáveis.
-- Foque no que o produtor deve fazer imediatamente
-- Priorize soluções regenerativas e de baixo custo
+- Bullets curtos e diretos com ações práticas imediatas.
+- Use os nomes dos insumos/técnicas da base quando aplicável.
+- Se algum vídeo da base reforçar a recomendação, mencione "(tem um vídeo sobre isso nas referências abaixo)" no bullet.
 
----
-
-REGRAS IMPORTANTES:
-- NÃO escrever textos longos
-- NÃO explicar tudo em detalhes por padrão
-- NÃO usar linguagem excessivamente técnica
-- Priorizar clareza e ação
-
-Evite respostas genéricas.`;
+REGRAS:
+- NÃO escreva textos longos.
+- NÃO use linguagem excessivamente técnica.
+- Tom acolhedor, sem soar robótico.
+- NÃO escreva o bloco de "Referências" — ele é gerado automaticamente depois da sua resposta.
+- Evite respostas genéricas.`;
 }
 
 function extrairTextoDoPayload(payload) {

@@ -7,6 +7,27 @@ const STOPWORDS = new Set([
   'por', 'qual', 'quais', 'que', 'sobre', 'um', 'uma', 'usar', 'uso',
 ]);
 
+// Lista mínima de termos ofensivos em pt-br para pré-validação rápida.
+const PALAVROES = new Set([
+  'merda', 'porra', 'caralho', 'puta', 'puto', 'foda', 'fodase', 'cu',
+  'fdp', 'arrombado', 'arrombada', 'idiota', 'imbecil', 'otario', 'otaria',
+  'babaca', 'lixo', 'viado', 'cuzao', 'desgracado', 'vagabundo',
+]);
+
+const FALLBACK_VAZIO = `Não consegui entender sua pergunta. 🤔
+
+Tente escrever com um pouco mais de detalhe — pode ser o nome do insumo, da cultura ou da prática agrícola que você quer saber.
+
+Ex.: "Como uso bokashi no milho?" ou "O que fazer com solo compactado?"`;
+
+const FALLBACK_OFENSA = `Vamos manter a conversa tranquila por aqui? 🙏
+
+Estou à disposição pra te ajudar com dúvidas sobre solo, lavoura, insumos e práticas regenerativas. É só mandar a pergunta de novo, com calma.`;
+
+const FALLBACK_FORA_ESCOPO = `Hmm, essa pergunta foge um pouquinho do que eu sei responder. 🌱
+
+Aqui eu te ajudo com agricultura regenerativa: solo, insumos, culturas, manejo e laudos. Tenta reformular trazendo o nome do insumo, da cultura ou da prática que você quer entender.`;
+
 const SELECT_ARTIGOS_RAG = `
   id, titulo, resumo, conteudo, autor, fonte, data_publicacao,
   artigos_categorias (categorias (id, nome)),
@@ -14,29 +35,59 @@ const SELECT_ARTIGOS_RAG = `
   metadados_artigos (*)
 `;
 
-export async function responderRAG(pergunta, opcoes = {}) {
-  const limite = normalizarLimite(opcoes.limit);
-  const candidatos = await buscarCandidatos();
-  const ranqueados = ranquearArtigos(candidatos, pergunta).slice(0, limite);
+const SELECT_VIDEOS_RAG = `
+  id, titulo, url_youtube, youtube_id, canal, transcricao, resumo
+`;
 
-  if (!ranqueados.length) {
+export async function responderRAG(pergunta, opcoes = {}) {
+  const validacao = validarEntrada(pergunta);
+  if (!validacao.valido) {
     return {
-      resposta: `Nao encontrei informacoes na base de conhecimento para responder sobre "${pergunta}". Tente informar o nome do insumo, cultura ou pratica agricola.`,
+      resposta: validacao.mensagem,
+      modo: validacao.motivo,
+      modelo: null,
+      fontes: [],
+      videos: [],
+      contexto_usado: [],
+    };
+  }
+
+  const limite = normalizarLimite(opcoes.limit);
+  const [candidatos, candidatosVideos] = await Promise.all([
+    buscarCandidatos(),
+    buscarCandidatosVideos(),
+  ]);
+  const ranqueados = ranquearArtigos(candidatos, pergunta).slice(0, limite);
+  const ranqueadosVideos = ranquearVideos(candidatosVideos, pergunta).slice(0, 3);
+
+  if (!ranqueados.length && !ranqueadosVideos.length) {
+    return {
+      resposta: FALLBACK_FORA_ESCOPO,
       modo: 'sem_contexto',
       modelo: null,
       fontes: [],
+      videos: [],
       contexto_usado: [],
     };
   }
 
   const contexto = montarContexto(ranqueados);
-  const respostaIA = await gerarRespostaComOpenAI({ pergunta, contexto });
+  const contextoVideos = montarContextoVideos(ranqueadosVideos);
+  const respostaIA = await gerarRespostaComOpenAI({
+    pergunta,
+    contexto,
+    contextoVideos,
+  });
+
+  const corpo = respostaIA.texto || gerarRespostaFallback(pergunta, ranqueados);
+  const blocoReferencias = montarBlocoReferenciasABNT(ranqueados, ranqueadosVideos);
 
   return {
-    resposta: respostaIA.texto || gerarRespostaFallback(pergunta, ranqueados),
+    resposta: blocoReferencias ? `${corpo}\n\n${blocoReferencias}` : corpo,
     modo: respostaIA.modo,
     modelo: respostaIA.modelo,
     fontes: ranqueados.map(formatarFonte),
+    videos: ranqueadosVideos.map(formatarVideo),
     contexto_usado: ranqueados.map((artigo) => ({
       id: artigo.id,
       titulo: artigo.titulo,
@@ -47,14 +98,22 @@ export async function responderRAG(pergunta, opcoes = {}) {
 
 /**
  * Retorna apenas a string de contexto formatada a partir da busca no banco.
+ * Usado pelo fluxo de PDF: devolve artigos + vídeos relevantes.
  */
 export async function obterContextoArtigos(pergunta, limite = 5) {
-  const candidatos = await buscarCandidatos();
+  const [candidatos, candidatosVideos] = await Promise.all([
+    buscarCandidatos(),
+    buscarCandidatosVideos(),
+  ]);
   const ranqueados = ranquearArtigos(candidatos, pergunta).slice(0, limite);
-  
+  const ranqueadosVideos = ranquearVideos(candidatosVideos, pergunta).slice(0, 3);
+
   return {
     texto: montarContexto(ranqueados),
-    fontes: ranqueados.map(formatarFonte)
+    textoVideos: montarContextoVideos(ranqueadosVideos),
+    fontes: ranqueados.map(formatarFonte),
+    videos: ranqueadosVideos.map(formatarVideo),
+    blocoReferencias: montarBlocoReferenciasABNT(ranqueados, ranqueadosVideos),
   };
 }
 
@@ -77,6 +136,20 @@ async function buscarCandidatos() {
     .limit(100);
 
   if (error) throw error;
+  return data || [];
+}
+
+async function buscarCandidatosVideos() {
+  const { data, error } = await supabase
+    .from('videos')
+    .select(SELECT_VIDEOS_RAG)
+    .eq('status', 'publicado')
+    .limit(100);
+
+  if (error) {
+    console.warn('[RAG] Falha ao buscar vídeos:', error.message);
+    return [];
+  }
   return data || [];
 }
 
@@ -244,4 +317,157 @@ function normalizarLimite(limit = 5) {
   const valor = Number(limit);
   if (Number.isNaN(valor)) return 5;
   return Math.min(Math.max(valor, 1), 10);
+}
+
+// ─── Vídeos ──────────────────────────────────────────────────────────────────
+
+function ranquearVideos(videos, pergunta) {
+  const perguntaNormalizada = normalizarTexto(pergunta);
+  const termos = extrairTermos(pergunta);
+
+  return videos
+    .map((video) => {
+      const titulo = normalizarTexto(video.titulo || '');
+      const resumo = normalizarTexto(video.resumo || '');
+      const transcricao = normalizarTexto(video.transcricao || '');
+      const canal = normalizarTexto(video.canal || '');
+
+      let score = 0;
+      if (perguntaNormalizada && titulo.includes(perguntaNormalizada)) score += 10;
+      if (perguntaNormalizada && resumo.includes(perguntaNormalizada)) score += 6;
+      if (perguntaNormalizada && transcricao.includes(perguntaNormalizada)) score += 4;
+
+      for (const termo of termos) {
+        if (titulo.includes(termo)) score += 5;
+        if (resumo.includes(termo)) score += 3;
+        if (canal.includes(termo)) score += 2;
+        if (transcricao.includes(termo)) score += 1;
+      }
+
+      return { ...video, score };
+    })
+    .filter((video) => video.score > 0)
+    .sort((a, b) => b.score - a.score);
+}
+
+function montarContextoVideos(videos) {
+  if (!videos.length) return '';
+  return videos.map((video, index) => {
+    return [
+      `Video ${index + 1}`,
+      `Titulo: ${video.titulo}`,
+      `Canal: ${video.canal || 'nao informado'}`,
+      `Resumo: ${video.resumo || 'nao informado'}`,
+      `Trecho da transcricao: ${limitarTexto(video.transcricao || '', 800)}`,
+      `URL: ${video.url_youtube}`,
+    ].join('\n');
+  }).join('\n\n---\n\n');
+}
+
+function formatarVideo(video) {
+  return {
+    id: video.id,
+    titulo: video.titulo,
+    canal: video.canal,
+    url_youtube: video.url_youtube,
+    youtube_id: video.youtube_id,
+    resumo: video.resumo,
+    score: video.score,
+  };
+}
+
+// ─── Validação de entrada ────────────────────────────────────────────────────
+
+function validarEntrada(pergunta) {
+  const texto = String(pergunta || '').trim();
+
+  if (!texto || texto.length < 3) {
+    return { valido: false, motivo: 'entrada_vazia', mensagem: FALLBACK_VAZIO };
+  }
+
+  // Sem letras nem dígitos — só emoji, pontuação, símbolos.
+  const semLetrasNemNumeros = !/[A-Za-zÀ-ÿ0-9]/.test(texto);
+  if (semLetrasNemNumeros) {
+    return { valido: false, motivo: 'entrada_vazia', mensagem: FALLBACK_VAZIO };
+  }
+
+  // Só números.
+  if (/^\d+$/.test(texto)) {
+    return { valido: false, motivo: 'entrada_vazia', mensagem: FALLBACK_VAZIO };
+  }
+
+  const termos = normalizarTexto(texto).split(/\s+/);
+  const temOfensa = termos.some((termo) => PALAVROES.has(termo));
+  if (temOfensa) {
+    return { valido: false, motivo: 'entrada_ofensiva', mensagem: FALLBACK_OFENSA };
+  }
+
+  return { valido: true };
+}
+
+// ─── Bloco de referências ABNT ───────────────────────────────────────────────
+
+function montarBlocoReferenciasABNT(artigos = [], videos = []) {
+  if (!artigos.length && !videos.length) return '';
+
+  const dataAcesso = formatarDataAcessoABNT(new Date());
+  const linhas = ['📚 *Referências*'];
+
+  if (artigos.length) {
+    linhas.push('', '*Artigos*');
+    artigos.forEach((artigo, index) => {
+      linhas.push(`${index + 1}. ${formatarReferenciaArtigo(artigo, dataAcesso)}`);
+    });
+  }
+
+  if (videos.length) {
+    linhas.push('', '*Vídeos*');
+    videos.forEach((video, index) => {
+      linhas.push(`${index + 1}. ${formatarReferenciaVideo(video, dataAcesso)}`);
+    });
+  }
+
+  return linhas.join('\n');
+}
+
+function formatarReferenciaArtigo(artigo, dataAcesso) {
+  const autor = formatarAutorABNT(artigo.autor) || 'AGROMINAS';
+  const titulo = artigo.titulo || 'Sem título';
+  const fonte = artigo.fonte || 'Agrominas';
+  const ano = extrairAno(artigo.data_publicacao) || '[s.d.]';
+  return `${autor}. ${titulo}. ${fonte}, ${ano}. Acesso em: ${dataAcesso}.`;
+}
+
+function formatarReferenciaVideo(video, dataAcesso) {
+  const canal = (video.canal || 'CANAL DESCONHECIDO').toUpperCase();
+  const titulo = video.titulo || 'Sem título';
+  const url = video.url_youtube || '';
+  return `${canal}. ${titulo}. YouTube, [s.d.]. 1 vídeo. Disponível em: <${url}>. Acesso em: ${dataAcesso}.`;
+}
+
+function formatarAutorABNT(autor) {
+  if (!autor) return '';
+  const nome = String(autor).trim();
+  if (!nome) return '';
+  if (nome.includes(';')) {
+    return nome.split(';').map((n) => formatarAutorABNT(n.trim())).filter(Boolean).join('; ');
+  }
+  const partes = nome.split(/\s+/);
+  if (partes.length === 1) return partes[0].toUpperCase();
+  const sobrenome = partes.pop().toUpperCase();
+  return `${sobrenome}, ${partes.join(' ')}`;
+}
+
+function extrairAno(data) {
+  if (!data) return null;
+  const match = String(data).match(/\d{4}/);
+  return match ? match[0] : null;
+}
+
+function formatarDataAcessoABNT(date) {
+  const meses = ['jan.', 'fev.', 'mar.', 'abr.', 'maio', 'jun.', 'jul.', 'ago.', 'set.', 'out.', 'nov.', 'dez.'];
+  const dia = String(date.getDate()).padStart(2, '0');
+  const mes = meses[date.getMonth()];
+  const ano = date.getFullYear();
+  return `${dia} ${mes} ${ano}`;
 }

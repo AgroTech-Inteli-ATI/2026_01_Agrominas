@@ -267,15 +267,10 @@ function isSaudacaoInicial(texto) {
 async function responderPerguntaAberta(pergunta, sessao) {
   const resultadoRAG = await responderRAG(pergunta);
   sessao.fontes = resultadoRAG.fontes || [];
+  sessao.videos = resultadoRAG.videos || [];
 
-  if (resultadoRAG.modo === "sem_contexto") {
-    return [
-      "🤔 *Ainda não encontrei uma resposta segura na base da Agrominas para essa pergunta.*",
-      "",
-      "Tente reformular com o nome do insumo, cultura ou prática agrícola.",
-      "",
-      "0️⃣ Voltar ao Menu Principal",
-    ].join("\n");
+  if (["entrada_vazia", "entrada_ofensiva", "sem_contexto"].includes(resultadoRAG.modo)) {
+    return `${resultadoRAG.resposta}\n\n0️⃣ Voltar ao Menu Principal`;
   }
 
   return [
@@ -285,7 +280,6 @@ async function responderPerguntaAberta(pergunta, sessao) {
     "",
     resultadoRAG.resposta,
     "",
-    "9️⃣ Ver fontes",
     "0️⃣ Voltar ao Menu Principal",
   ].join("\n");
 }
@@ -431,9 +425,18 @@ export const receberMensagem = async (req, res, next) => {
 
     // --- MOSTRAR FONTES (Gatilho Global para quando a opção é exibida) ---
     if (textoLimpo === "9") {
+        const partes = [];
         if (sessao.fontes && sessao.fontes.length > 0) {
-            const listaFontes = sessao.fontes.map((f, i) => `${i + 1}. *${f.titulo}*`).join('\n');
-            await responder(`📚 *Fontes utilizadas:* \n\n${listaFontes}\n\n0️⃣ Voltar ao Menu Principal`);
+            partes.push("*Artigos*");
+            partes.push(sessao.fontes.map((f, i) => `${i + 1}. ${f.titulo}`).join('\n'));
+        }
+        if (sessao.videos && sessao.videos.length > 0) {
+            if (partes.length) partes.push("");
+            partes.push("*Vídeos*");
+            partes.push(sessao.videos.map((v, i) => `${i + 1}. ${v.titulo} — ${v.url_youtube}`).join('\n'));
+        }
+        if (partes.length > 0) {
+            await responder(`📚 *Fontes utilizadas:*\n\n${partes.join('\n')}\n\n0️⃣ Voltar ao Menu Principal`);
         } else {
             await responder("Nenhuma fonte específica foi usada para a última resposta.\n\n0️⃣ Voltar ao Menu Principal");
         }
@@ -527,8 +530,9 @@ export const receberMensagem = async (req, res, next) => {
 
       if (insumosMap[textoLimpo]) {
         const resultadoRAG = await responderRAG(insumosMap[textoLimpo]);
-        sessao.fontes = resultadoRAG.fontes; // Salva fontes na sessão
-        respostaTexto = `📋 *${insumosMap[textoLimpo]}*\n\n${resultadoRAG.resposta}\n\n9️⃣ Ver fontes\n0️⃣ Voltar ao Menu Principal`;
+        sessao.fontes = resultadoRAG.fontes;
+        sessao.videos = resultadoRAG.videos || [];
+        respostaTexto = `📋 *${insumosMap[textoLimpo]}*\n\n${resultadoRAG.resposta}\n\n0️⃣ Voltar ao Menu Principal`;
       } else if (textoLimpo === "6") {
         sessao.estado = MENUS.INSUMOS_BUSCA;
         respostaTexto = MENSAGENS.BUSCA_LIVRE_INSUMO;
@@ -555,8 +559,9 @@ export const receberMensagem = async (req, res, next) => {
         if (resultadoRAG.modo === "sem_contexto") {
           respostaTexto = MENSAGENS.INSUMO_NAO_ENCONTRADO;
         } else {
-          sessao.fontes = resultadoRAG.fontes; // Salva fontes na sessão
-          respostaTexto = `📋 *Busca: ${mensagemOriginal}*\n\n${resultadoRAG.resposta}\n\n9️⃣ Ver fontes\n0️⃣ Voltar ao Menu Principal`;
+          sessao.fontes = resultadoRAG.fontes;
+          sessao.videos = resultadoRAG.videos || [];
+          respostaTexto = `📋 *Busca: ${mensagemOriginal}*\n\n${resultadoRAG.resposta}\n\n0️⃣ Voltar ao Menu Principal`;
           sessao.estado = MENUS.INSUMOS;
         }
       }
@@ -577,8 +582,9 @@ export const receberMensagem = async (req, res, next) => {
         const resultadoRAG = await responderRAG(
           `insumos regenerativos para ${culturasMap[textoLimpo]}`,
         );
-        sessao.fontes = resultadoRAG.fontes; // Salva fontes na sessão
-        respostaTexto = `🌱 *Insumos Regenerativos para ${culturasMap[textoLimpo]}*\n\n${resultadoRAG.resposta}\n\n9️⃣ Ver fontes\n0️⃣ Voltar ao Menu Principal`;
+        sessao.fontes = resultadoRAG.fontes;
+        sessao.videos = resultadoRAG.videos || [];
+        respostaTexto = `🌱 *Insumos Regenerativos para ${culturasMap[textoLimpo]}*\n\n${resultadoRAG.resposta}\n\n0️⃣ Voltar ao Menu Principal`;
       } else if (textoLimpo === "7") {
         sessao.estado = MENUS.CULTURA_BUSCA;
         respostaTexto = MENSAGENS.BUSCA_LIVRE_CULTURA;
@@ -612,8 +618,9 @@ export const receberMensagem = async (req, res, next) => {
         if (resultadoRAG.modo === "sem_contexto") {
           respostaTexto = MENSAGENS.CULTURA_NAO_ENCONTRADA;
         } else {
-          sessao.fontes = resultadoRAG.fontes; // Salva fontes na sessão
-          respostaTexto = `🌱 *Recomendações para ${mensagemOriginal}*\n\n${resultadoRAG.resposta}\n\n9️⃣ Ver fontes\n0️⃣ Voltar ao Menu Principal`;
+          sessao.fontes = resultadoRAG.fontes;
+          sessao.videos = resultadoRAG.videos || [];
+          respostaTexto = `🌱 *Recomendações para ${mensagemOriginal}*\n\n${resultadoRAG.resposta}\n\n0️⃣ Voltar ao Menu Principal`;
           sessao.estado = MENUS.CULTURA;
         }
       }
@@ -631,10 +638,11 @@ export const receberMensagem = async (req, res, next) => {
 
       if (soloMap[textoLimpo]) {
         const resultadoRAG = await responderRAG(soloMap[textoLimpo]);
-        sessao.fontes = resultadoRAG.fontes; // Salva fontes na sessão
+        sessao.fontes = resultadoRAG.fontes;
+        sessao.videos = resultadoRAG.videos || [];
         respostaTexto =
           resultadoRAG.resposta +
-          "\n\n9️⃣ Ver fontes\n2️⃣ Consultar outro tema de solo\n0️⃣ Voltar ao Menu Principal";
+          "\n\n2️⃣ Consultar outro tema de solo\n0️⃣ Voltar ao Menu Principal";
       } else if (textoLimpo === "2") {
         respostaTexto = MENSAGENS.SUBMENU_SOLO;
       } else if (textoLimpo === "6") {
@@ -669,7 +677,7 @@ export const receberMensagem = async (req, res, next) => {
               throw new Error("Não foi possível extrair texto legível do PDF.");
             }
 
-            // 3. Busca contexto científico relevante
+            // 3. Busca contexto científico relevante (artigos + vídeos)
             const contextoCientifico = await obterContextoArtigos(
               "recomendações para laudo de solo",
               3,
@@ -680,10 +688,15 @@ export const receberMensagem = async (req, res, next) => {
               pergunta: "Analise este laudo e dê recomendações regenerativas",
               textoPDF: textoPDF,
               contextoCientifico: contextoCientifico.texto,
+              contextoVideos: contextoCientifico.textoVideos,
             });
 
-            sessao.fontes = contextoCientifico.fontes; // Salva fontes na sessão
-            respostaTexto = `📊 *Análise do seu Laudo de Solo*\n\n${resultadoIA.texto}\n\n9️⃣ Ver fontes\n\n⚠️ *Aviso importante:* Estas são recomendações orientativas. Consulte sempre um agrônomo.\n\n1️⃣ Enviar outro laudo\n2️⃣ Consultar temas de solo\n0️⃣ Voltar ao Menu Principal`;
+            sessao.fontes = contextoCientifico.fontes;
+            sessao.videos = contextoCientifico.videos || [];
+            const blocoRefPDF = contextoCientifico.blocoReferencias
+              ? `\n\n${contextoCientifico.blocoReferencias}`
+              : "";
+            respostaTexto = `📊 *Análise do seu Laudo de Solo*\n\n${resultadoIA.texto}${blocoRefPDF}\n\n⚠️ *Aviso importante:* Estas são recomendações orientativas. Consulte sempre um agrônomo.\n\n1️⃣ Enviar outro laudo\n2️⃣ Consultar temas de solo\n0️⃣ Voltar ao Menu Principal`;
             sessao.estado = MENUS.AGUARDANDO_PDF;
           } catch (error) {
             console.error("[BOT] Erro ao processar PDF:", error);
@@ -909,13 +922,19 @@ export const receberPDF = async (req, res, next) => {
       pergunta,
       textoPDF,
       contextoCientifico: contextoCientifico.texto,
+      contextoVideos: contextoCientifico.textoVideos,
     });
+
+    const respostaFinal = contextoCientifico.blocoReferencias
+      ? `${resultado.texto}\n\n${contextoCientifico.blocoReferencias}`
+      : resultado.texto;
 
     res.json({
       pergunta,
-      resposta: resultado.texto,
+      resposta: respostaFinal,
       modelo: resultado.modelo,
-      fontes: contextoCientifico.fontes, // Mostra quais artigos científicos fundamentaram a resposta
+      fontes: contextoCientifico.fontes,
+      videos: contextoCientifico.videos,
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
