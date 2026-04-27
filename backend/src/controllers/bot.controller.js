@@ -14,13 +14,6 @@ import {
   salvarContatoBot,
 } from "../services/bot-history.service.js";
 
-const BOT_STARTED_AT_SECONDS = Math.floor(Date.now() / 1000);
-const FILTRAR_HISTORICO_DE_DESCONHECIDOS =
-  process.env.BOT_FILTER_HISTORICAL_UNKNOWN_CONTACTS !== "false";
-const TOLERANCIA_INICIO_SEGUNDOS = Number(
-  process.env.BOT_STARTUP_MESSAGE_GRACE_SECONDS || 10,
-);
-
 // Cache para evitar processar a mesma mensagem várias vezes (deduplicação)
 const processados = new Set();
 const contatosConhecidos = new Set();
@@ -72,14 +65,16 @@ Por favor, digite apenas o *número* correspondente à sua escolha:
 4️⃣ Fazer uma pergunta aberta
 5️⃣ Encerrar atendimento`,
 
-  PERGUNTA_ABERTA: `Pode mandar sua pergunta em texto livre.
+  PERGUNTA_ABERTA: `💬 *Pergunta aberta*
+
+Pode mandar sua dúvida em texto livre.
 
 Exemplos:
 - Qual biofertilizante posso usar no milho?
 - Como melhorar solo compactado?
 - O que fazer quando o pH esta baixo?
 
-0 - Voltar ao Menu Principal`,
+0️⃣ Voltar ao Menu Principal`,
 
   SUBMENU_INSUMOS: `Ótimo! Vamos falar sobre *insumos regenerativos*. 🌿
 
@@ -237,13 +232,6 @@ function normalizarTimestampSegundos(timestamp) {
   return null;
 }
 
-function isMensagemHistorica(data) {
-  const timestamp = normalizarTimestampSegundos(data?.messageTimestamp);
-  if (!timestamp) return false;
-
-  return timestamp < BOT_STARTED_AT_SECONDS - TOLERANCIA_INICIO_SEGUNDOS;
-}
-
 function extrairTextoMensagem(mensagemData) {
   return (
     mensagemData?.conversation ||
@@ -274,27 +262,71 @@ function isSaudacaoInicial(texto) {
   ].includes(texto.trim().toLowerCase());
 }
 
-async function responderPerguntaAberta(pergunta, sessao) {
-  const resultadoRAG = await responderRAG(pergunta);
+function isPedidoAprofundamento(texto) {
+  const normalizado = texto
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+  return [
+    "sim",
+    "s",
+    "quero",
+    "pode",
+    "pode sim",
+    "detalhe",
+    "detalhes",
+    "detalhar",
+    "explique melhor",
+    "aprofundar",
+    "quero aprofundar",
+    "mais detalhes",
+    "me explique melhor",
+  ].includes(normalizado);
+}
+
+function montarPerguntaAprofundada(mensagem, sessao) {
+  const ultimaPergunta = sessao.ultimaPerguntaAberta;
+
+  if (!ultimaPergunta) {
+    return mensagem;
+  }
+
+  if (isPedidoAprofundamento(mensagem)) {
+    return `Aprofunde a resposta anterior sobre: ${ultimaPergunta}`;
+  }
+
+  return `${ultimaPergunta}. Aprofunde especificamente este ponto: ${mensagem}`;
+}
+
+async function responderPerguntaAberta(pergunta, sessao, opcoes = {}) {
+  const perguntaConsulta = opcoes.aprofundar
+    ? montarPerguntaAprofundada(pergunta, sessao)
+    : pergunta;
+  const resultadoRAG = await responderRAG(perguntaConsulta);
   sessao.fontes = resultadoRAG.fontes || [];
+  sessao.ultimaPerguntaAberta = perguntaConsulta;
 
   if (resultadoRAG.modo === "sem_contexto") {
     return [
-      "Ainda nao encontrei uma resposta segura na base da Agrominas para essa pergunta.",
+      "🤔 *Ainda não encontrei uma resposta segura na base da Agrominas para essa pergunta.*",
       "",
-      "Voce pode tentar reformular com o nome do insumo, cultura ou problema de solo.",
+      "Tente reformular com o nome do insumo, cultura ou prática agrícola.",
       "",
-      "0 - Voltar ao Menu Principal",
+      "0️⃣ Voltar ao Menu Principal",
     ].join("\n");
   }
 
   return [
-    `*Pergunta:* ${pergunta}`,
+    "💬 *Pergunta aberta*",
+    "",
+    `*Sua dúvida:* ${perguntaConsulta}`,
     "",
     resultadoRAG.resposta,
     "",
-    "9 - Ver fontes",
-    "0 - Voltar ao Menu Principal",
+    "9️⃣ Ver fontes",
+    "0️⃣ Voltar ao Menu Principal",
   ].join("\n");
 }
 
@@ -350,33 +382,6 @@ export const receberMensagem = async (req, res, next) => {
   }
 
   const contatoExistente = await obterContatoConhecido(remoteJid);
-  const historicoForaDoEscopo =
-    FILTRAR_HISTORICO_DE_DESCONHECIDOS &&
-    isMensagemHistorica(payload.data) &&
-    !contatoExistente;
-
-  if (historicoForaDoEscopo) {
-    return res.status(200).send("Ignorado: historico fora do escopo do bot.");
-  }
-
-  if (isMensagemHistorica(payload.data) && contatoExistente) {
-    contatosConhecidos.add(remoteJid);
-    await registrarMensagemBot({
-      remoteJid,
-      messageId: msgId,
-      direcao: "entrada",
-      tipo: payload.data?.messageType || "text",
-      texto: extrairTextoMensagem(payload.data?.message),
-      timestamp: normalizarTimestampSegundos(payload.data?.messageTimestamp),
-      payload: {
-        event: payload.event,
-        instance: payload.instance,
-        replayed: true,
-      },
-    });
-    return res.status(200).send("Historico do bot registrado.");
-  }
-
   // Responde OK imediatamente para a Evolution API não reenviar por timeout
   res.status(200).send("OK");
 
@@ -434,6 +439,7 @@ export const receberMensagem = async (req, res, next) => {
         fontes: Array.isArray(contatoExistente?.fontes)
           ? contatoExistente.fontes
           : [],
+        ultimaPerguntaAberta: null,
       };
 
       if (!contatoExistente) {
@@ -523,6 +529,13 @@ export const receberMensagem = async (req, res, next) => {
       if (textoLimpo === "0") {
         sessao.estado = MENUS.PRINCIPAL;
         respostaTexto = MENSAGENS.MENU_PRINCIPAL;
+      } else if (
+        sessao.ultimaPerguntaAberta &&
+        (isPedidoAprofundamento(mensagemOriginal) || isPerguntaLivre(mensagemOriginal))
+      ) {
+        respostaTexto = await responderPerguntaAberta(mensagemOriginal, sessao, {
+          aprofundar: true,
+        });
       } else if (!isPerguntaLivre(mensagemOriginal)) {
         respostaTexto = MENSAGENS.PERGUNTA_ABERTA;
       } else {

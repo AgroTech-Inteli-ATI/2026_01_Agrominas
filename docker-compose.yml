@@ -71,8 +71,6 @@ services:
       - EVOLUTION_URL=http://evolution:8080
       - EVOLUTION_INSTANCE=${EVOLUTION_INSTANCE:-agrominas}
       - EVOLUTION_WEBHOOK_URL=http://backend:3000/api/v1/bot/webhook
-      - BOT_FILTER_HISTORICAL_UNKNOWN_CONTACTS=true
-      - BOT_STARTUP_MESSAGE_GRACE_SECONDS=10
       - BOT_HISTORY_ENABLED=true
       - BOT_ALLOWED_NUMBERS=${BOT_ALLOWED_NUMBERS:-}
 
