@@ -32,38 +32,40 @@ const MENUS = {
   MOSTRAR_FONTES: "MOSTRAR_FONTES",
 };
 
+const MENU_PRINCIPAL_INTERATIVO = `🌱 *Menu Principal | Guia Regenerativo*
+
+Cada escolha no campo ajuda a cuidar melhor do solo, da lavoura e do futuro da produção.
+
+Escolha uma opção:
+
+1️⃣ *Insumos regenerativos*
+Biofertilizantes, compostos, inoculantes e corretivos.
+
+2️⃣ *Cultura / tipo de plantio*
+Recomendações por soja, milho, café, hortaliças e mais.
+
+3️⃣ *Solo e laudo PDF*
+pH, compactação, matéria orgânica e análise de laudo.
+
+4️⃣ *Pergunta aberta*
+Escreva sua dúvida do seu jeito.
+
+5️⃣ *Encerrar atendimento*
+
+💬 Você também pode mandar uma pergunta em texto livre.`;
+
 const MENSAGENS = {
-  BOAS_VINDAS: `Olá! 👋 Bem-vindo ao *Guia Regenerativo* da Agrominas.
+  BOAS_VINDAS: `Olá! 👋 Bem-vindo ao *Guia Regenerativo da Agrominas*.
 
-Sou seu assistente de insumos e manejo sustentável. Estou aqui para te ajudar a encontrar informações técnicas sobre práticas regenerativas de forma simples e rápida.
+Estou aqui para ajudar você a transformar dúvidas do dia a dia em decisões mais seguras para o solo e a lavoura.
 
-Para começar, escolha uma opção abaixo:
+${MENU_PRINCIPAL_INTERATIVO}`,
 
-1️⃣ Insumos Regenerativos Específicos
-2️⃣ Cultura / Tipo de Plantio
-3️⃣ Dúvidas Gerais sobre Solo
-4️⃣ Fazer uma pergunta aberta
-5️⃣ Encerrar atendimento
+  MENU_PRINCIPAL: MENU_PRINCIPAL_INTERATIVO,
 
-👉 Digite o *número* da opção desejada.`,
+  FALLBACK_PRINCIPAL: `Ainda não consegui identificar essa opção. 🤔
 
-  MENU_PRINCIPAL: `1️⃣ Insumos Regenerativos Específicos
-2️⃣ Cultura / Tipo de Plantio
-3️⃣ Dúvidas Gerais sobre Solo
-4️⃣ Fazer uma pergunta aberta
-5️⃣ Encerrar atendimento
-
-Ou envie sua pergunta em texto livre.`,
-
-  FALLBACK_PRINCIPAL: `Hmm, não reconheci essa opção. 🤔
-
-Por favor, digite apenas o *número* correspondente à sua escolha:
-
-1️⃣ Insumos Regenerativos Específicos
-2️⃣ Cultura / Tipo de Plantio
-3️⃣ Dúvidas Gerais sobre Solo
-4️⃣ Fazer uma pergunta aberta
-5️⃣ Encerrar atendimento`,
+${MENU_PRINCIPAL_INTERATIVO}`,
 
   PERGUNTA_ABERTA: `💬 *Pergunta aberta*
 
@@ -262,51 +264,9 @@ function isSaudacaoInicial(texto) {
   ].includes(texto.trim().toLowerCase());
 }
 
-function isPedidoAprofundamento(texto) {
-  const normalizado = texto
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-
-  return [
-    "sim",
-    "s",
-    "quero",
-    "pode",
-    "pode sim",
-    "detalhe",
-    "detalhes",
-    "detalhar",
-    "explique melhor",
-    "aprofundar",
-    "quero aprofundar",
-    "mais detalhes",
-    "me explique melhor",
-  ].includes(normalizado);
-}
-
-function montarPerguntaAprofundada(mensagem, sessao) {
-  const ultimaPergunta = sessao.ultimaPerguntaAberta;
-
-  if (!ultimaPergunta) {
-    return mensagem;
-  }
-
-  if (isPedidoAprofundamento(mensagem)) {
-    return `Aprofunde a resposta anterior sobre: ${ultimaPergunta}`;
-  }
-
-  return `${ultimaPergunta}. Aprofunde especificamente este ponto: ${mensagem}`;
-}
-
-async function responderPerguntaAberta(pergunta, sessao, opcoes = {}) {
-  const perguntaConsulta = opcoes.aprofundar
-    ? montarPerguntaAprofundada(pergunta, sessao)
-    : pergunta;
-  const resultadoRAG = await responderRAG(perguntaConsulta);
+async function responderPerguntaAberta(pergunta, sessao) {
+  const resultadoRAG = await responderRAG(pergunta);
   sessao.fontes = resultadoRAG.fontes || [];
-  sessao.ultimaPerguntaAberta = perguntaConsulta;
 
   if (resultadoRAG.modo === "sem_contexto") {
     return [
@@ -321,7 +281,7 @@ async function responderPerguntaAberta(pergunta, sessao, opcoes = {}) {
   return [
     "💬 *Pergunta aberta*",
     "",
-    `*Sua dúvida:* ${perguntaConsulta}`,
+    `*Sua dúvida:* ${pergunta}`,
     "",
     resultadoRAG.resposta,
     "",
@@ -439,7 +399,6 @@ export const receberMensagem = async (req, res, next) => {
         fontes: Array.isArray(contatoExistente?.fontes)
           ? contatoExistente.fontes
           : [],
-        ultimaPerguntaAberta: null,
       };
 
       if (!contatoExistente) {
@@ -478,7 +437,7 @@ export const receberMensagem = async (req, res, next) => {
         } else {
             await responder("Nenhuma fonte específica foi usada para a última resposta.\n\n0️⃣ Voltar ao Menu Principal");
         }
-        sessao.estado = MENUS.PRINCIPAL;
+        sessao.estado = MENUS.MOSTRAR_FONTES;
         return;
     }
 
@@ -487,6 +446,10 @@ export const receberMensagem = async (req, res, next) => {
     // --- MENU PRINCIPAL ---
     if (sessao.estado === MENUS.PRINCIPAL) {
       switch (textoLimpo) {
+        case "0":
+          sessao.estado = MENUS.PRINCIPAL;
+          respostaTexto = MENSAGENS.MENU_PRINCIPAL;
+          break;
         case "1":
           sessao.estado = MENUS.INSUMOS;
           respostaTexto = MENSAGENS.SUBMENU_INSUMOS;
@@ -524,18 +487,27 @@ export const receberMensagem = async (req, res, next) => {
       }
     }
 
+    // --- RETORNO APÓS MOSTRAR FONTES ---
+    else if (sessao.estado === MENUS.MOSTRAR_FONTES) {
+      if (textoLimpo === "0") {
+        sessao.estado = MENUS.PRINCIPAL;
+        respostaTexto = MENSAGENS.MENU_PRINCIPAL;
+      } else if (isPerguntaLivre(mensagemOriginal)) {
+        sessao.estado = MENUS.PERGUNTA_ABERTA;
+        respostaTexto = await responderPerguntaAberta(mensagemOriginal, sessao);
+      } else {
+        sessao.estado = MENUS.PRINCIPAL;
+        respostaTexto =
+          "Tudo certo, voltando ao menu principal. 👇\n\n" +
+          MENSAGENS.MENU_PRINCIPAL;
+      }
+    }
+
     // --- PERGUNTA ABERTA ---
     else if (sessao.estado === MENUS.PERGUNTA_ABERTA) {
       if (textoLimpo === "0") {
         sessao.estado = MENUS.PRINCIPAL;
         respostaTexto = MENSAGENS.MENU_PRINCIPAL;
-      } else if (
-        sessao.ultimaPerguntaAberta &&
-        (isPedidoAprofundamento(mensagemOriginal) || isPerguntaLivre(mensagemOriginal))
-      ) {
-        respostaTexto = await responderPerguntaAberta(mensagemOriginal, sessao, {
-          aprofundar: true,
-        });
       } else if (!isPerguntaLivre(mensagemOriginal)) {
         respostaTexto = MENSAGENS.PERGUNTA_ABERTA;
       } else {
@@ -606,7 +578,7 @@ export const receberMensagem = async (req, res, next) => {
           `insumos regenerativos para ${culturasMap[textoLimpo]}`,
         );
         sessao.fontes = resultadoRAG.fontes; // Salva fontes na sessão
-        respostaTexto = `🌱 *Insumos Regenerativos para ${culturasMap[textoLimpo]}*\n\n${resultadoRAG.resposta}\n\n9️⃣ Ver fontes\n1️⃣ Escolher um insumo para aprofundar\n2️⃣ Consultar outra cultura\n0️⃣ Voltar ao Menu Principal`;
+        respostaTexto = `🌱 *Insumos Regenerativos para ${culturasMap[textoLimpo]}*\n\n${resultadoRAG.resposta}\n\n9️⃣ Ver fontes\n0️⃣ Voltar ao Menu Principal`;
       } else if (textoLimpo === "7") {
         sessao.estado = MENUS.CULTURA_BUSCA;
         respostaTexto = MENSAGENS.BUSCA_LIVRE_CULTURA;
@@ -641,7 +613,7 @@ export const receberMensagem = async (req, res, next) => {
           respostaTexto = MENSAGENS.CULTURA_NAO_ENCONTRADA;
         } else {
           sessao.fontes = resultadoRAG.fontes; // Salva fontes na sessão
-          respostaTexto = `🌱 *Recomendações para ${mensagemOriginal}*\n\n${resultadoRAG.resposta}\n\n9️⃣ Ver fontes\n1️⃣ Escolher um insumo para aprofundar\n2️⃣ Consultar outra cultura\n0️⃣ Voltar ao Menu Principal`;
+          respostaTexto = `🌱 *Recomendações para ${mensagemOriginal}*\n\n${resultadoRAG.resposta}\n\n9️⃣ Ver fontes\n0️⃣ Voltar ao Menu Principal`;
           sessao.estado = MENUS.CULTURA;
         }
       }
@@ -711,8 +683,8 @@ export const receberMensagem = async (req, res, next) => {
             });
 
             sessao.fontes = contextoCientifico.fontes; // Salva fontes na sessão
-            respostaTexto = `📊 *Análise do seu Laudo de Solo*\n\n${resultadoIA.texto}\n\n9️⃣ Ver fontes\n\n⚠️ *Aviso importante:* Estas são recomendações orientativas. Consulte sempre um agrônomo.\n\nDeseja saber mais?\n\n1️⃣ Sim, quero detalhes de um insumo\n2️⃣ Enviar outro laudo\n0️⃣ Voltar ao Menu Principal`;
-            sessao.estado = MENUS.SOLO;
+            respostaTexto = `📊 *Análise do seu Laudo de Solo*\n\n${resultadoIA.texto}\n\n9️⃣ Ver fontes\n\n⚠️ *Aviso importante:* Estas são recomendações orientativas. Consulte sempre um agrônomo.\n\n1️⃣ Enviar outro laudo\n2️⃣ Consultar temas de solo\n0️⃣ Voltar ao Menu Principal`;
+            sessao.estado = MENUS.AGUARDANDO_PDF;
           } catch (error) {
             console.error("[BOT] Erro ao processar PDF:", error);
             respostaTexto =

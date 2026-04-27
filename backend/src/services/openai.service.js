@@ -124,9 +124,6 @@ O que fazer agora:
 - Liste de 2 a 4 acoes praticas.
 - Cite insumos, culturas ou tecnicas da base quando forem relevantes.
 
-Quer aprofundar?
-- Ofereca uma proxima pergunta curta.
-
 REGRAS:
 - Nao inventar informacoes fora da base.
 - Nao escrever texto longo.
@@ -183,9 +180,6 @@ O que fazer agora:
 - Use os nomes dos insumos ou técnicas citados na BASE DE CONHECIMENTO CIENTÍFICO se forem aplicáveis.
 - Foque no que o produtor deve fazer imediatamente
 - Priorize soluções regenerativas e de baixo custo
-
-Quer saber mais?
-- Ofereça aprofundamento em 1 linha (ex: posso detalhar solo, nutrientes, biologia, etc.)
 
 ---
 
