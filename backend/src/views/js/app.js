@@ -6,6 +6,7 @@ import { renderLogin } from '../pages/login.js';
 import { renderHome } from '../pages/home.js';
 import { renderConfirmacao } from '../pages/confirmacao.js';
 import { renderConsulta } from '../pages/consulta.js';
+import { renderGestaoBot } from '../pages/gestao-bot.js';
 
 // Middleware para proteger rotas que exigem autenticacao
 function requireAuth(handler) {
@@ -34,6 +35,7 @@ router.register('/', () => {
 router.register('/home', requireAuth(renderHome));
 router.register('/confirmacao', requireAuth(renderConfirmacao));
 router.register('/consulta', requireAuth(renderConsulta));
+router.register('/gestao-bot', requireAuth(renderGestaoBot));
 
 // Renderizando pagina de erro 404 para rotas inexistentes
 router.register('/404', () => {

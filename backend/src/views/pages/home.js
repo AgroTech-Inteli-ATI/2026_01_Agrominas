@@ -149,12 +149,60 @@ function setupEventListeners() {
     atualizarPreviewArquivos();
   });
 
-  // Navegando para confirmacao com arquivos selecionados
-  btnContinuar?.addEventListener('click', () => {
-    if (arquivosSelecionados.length > 0) {
-      sessionStorage.setItem('arquivosPendentes', JSON.stringify(arquivosSelecionados));
-      router.navigate('/confirmacao');
+  // Processando arquivos e navegando para confirmacao
+  btnContinuar?.addEventListener('click', async () => {
+    if (arquivosSelecionados.length === 0) return;
+
+    btnContinuar.disabled = true;
+    btnContinuar.textContent = 'Processando...';
+
+    const pendentes = [];
+    let erros = 0;
+
+    for (const item of arquivosSelecionados) {
+      if (item.tipo === 'arquivo' && item.arquivo instanceof File) {
+        // Arquivo PDF: envia ao backend para extração de texto e metadados
+        try {
+          const resultado = await api.processarPDF(item.arquivo);
+          pendentes.push({
+            id: item.id,
+            nome: resultado.data.titulo,
+            titulo: resultado.data.titulo,
+            resumo: resultado.data.resumo || '',
+            autor: resultado.data.autor || '',
+            fonte: resultado.data.fonte || '',
+            conteudo: resultado.data.conteudo,
+            nome_arquivo: resultado.data.nome_arquivo,
+            tipo: 'arquivo',
+            tamanho: item.tamanho,
+            status: 'publicado',
+            categorias: [],
+            insumos: [],
+          });
+        } catch (err) {
+          console.error(`Erro ao processar ${item.nome}:`, err);
+          erros++;
+        }
+      } else {
+        // URL, Drive ou Texto: passam direto sem extração
+        pendentes.push(item);
+      }
     }
+
+    btnContinuar.disabled = false;
+    btnContinuar.textContent = 'Continuar →';
+
+    if (pendentes.length === 0) {
+      showToast('Nenhum arquivo pôde ser processado. Verifique se os PDFs são válidos.', 'error');
+      return;
+    }
+
+    if (erros > 0) {
+      showToast(`${erros} arquivo(s) não puderam ser processados e foram ignorados.`, 'error');
+    }
+
+    sessionStorage.setItem('arquivosPendentes', JSON.stringify(pendentes));
+    router.navigate('/confirmacao');
   });
 }
 

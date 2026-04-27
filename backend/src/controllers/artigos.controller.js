@@ -1,5 +1,137 @@
 import { supabase } from '../config/supabase.js';
 
+// ─── POLYFILLS exigidos pelo pdfjs-dist em Node.js ───────────────────────────
+if (typeof globalThis.DOMMatrix === 'undefined') {
+  globalThis.DOMMatrix = class DOMMatrix {
+    constructor() {
+      Object.assign(this, {
+        a:1,b:0,c:0,d:1,e:0,f:0,
+        m11:1,m12:0,m13:0,m14:0,m21:0,m22:1,m23:0,m24:0,
+        m31:0,m32:0,m33:1,m34:0,m41:0,m42:0,m43:0,m44:1,
+        is2D: true, isIdentity: true,
+      });
+    }
+    multiply() { return this; }
+    translate() { return this; }
+    scale() { return this; }
+    inverse() { return this; }
+    transformPoint(p) { return p; }
+  };
+}
+if (typeof globalThis.ImageData === 'undefined') {
+  globalThis.ImageData = class ImageData {
+    constructor(w, h) { this.width = w; this.height = h; this.data = new Uint8ClampedArray(w * h * 4); }
+  };
+}
+if (typeof globalThis.Path2D === 'undefined') {
+  globalThis.Path2D = class Path2D {};
+}
+
+// Extrai texto de um Buffer PDF usando pdfjs-dist
+async function extrairTextoPDF(buffer) {
+  const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const pdf = await getDocument({ data: new Uint8Array(buffer) }).promise;
+
+  let texto = '';
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const pagina = await pdf.getPage(i);
+    const conteudo = await pagina.getTextContent();
+    texto += conteudo.items.map((item) => item.str).join(' ') + '\n';
+  }
+
+  // Remove null bytes e caracteres de controle inválidos que o PostgreSQL rejeita.
+  // pdfjs-dist em Node <20 pode incluir \x00 no texto extraído.
+  return texto
+    .replace(/\x00/g, '')                        // null bytes
+    .replace(/[\x01-\x08\x0B\x0C\x0E-\x1F]/g, '') // outros controles (preserva \t \n \r)
+    .trim();
+}
+
+// Heurísticas simples para extrair metadados do texto bruto do PDF
+function extrairMetadados(texto, nomeArquivo) {
+  const linhas = texto
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  // Título: primeira linha com 10–200 caracteres que não pareça número de página
+  const titulo =
+    linhas.find((l) => l.length >= 10 && l.length <= 200 && !/^\d+$/.test(l)) ||
+    nomeArquivo.replace(/\.pdf$/i, '').replace(/[-_]/g, ' ');
+
+  // Autor: linha que contenha padrões comuns de autoria
+  const padroesAutor = /\b(autor[a]?|author|por|by|elaborad[ao] por)\b[:.]?\s*(.+)/i;
+  let autor = null;
+  for (const linha of linhas.slice(0, 30)) {
+    const match = linha.match(padroesAutor);
+    if (match) {
+      autor = match[2].trim().slice(0, 120);
+      break;
+    }
+  }
+
+  // Fonte: linha que contenha padrões de origem/instituição
+  const padroesFonte = /\b(fonte|source|publicad[ao] por|published by|embrapa|universidade|instituto|ministério|revista)\b/i;
+  let fonte = null;
+  for (const linha of linhas.slice(0, 40)) {
+    if (padroesFonte.test(linha) && linha.length <= 150) {
+      fonte = linha.slice(0, 150);
+      break;
+    }
+  }
+
+  // Resumo: parágrafo logo após "resumo" ou "abstract", até 600 chars
+  let resumo = null;
+  const idxResumo = linhas.findIndex((l) => /^(resumo|abstract)[\s.:]*$/i.test(l));
+  if (idxResumo !== -1 && linhas[idxResumo + 1]) {
+    resumo = linhas
+      .slice(idxResumo + 1, idxResumo + 6)
+      .join(' ')
+      .slice(0, 600);
+  }
+
+  return { titulo, autor, fonte, resumo };
+}
+
+// POST /artigos/processar-pdf  — recebe PDF, extrai texto e retorna metadados sugeridos
+export const processarPDF = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Nenhum arquivo enviado.' });
+    }
+
+    if (req.file.mimetype !== 'application/pdf') {
+      return res.status(400).json({ error: 'Apenas arquivos PDF são aceitos.' });
+    }
+
+    let conteudo;
+    try {
+      conteudo = await extrairTextoPDF(req.file.buffer);
+    } catch (e) {
+      return res.status(422).json({ error: 'Não foi possível extrair texto do PDF. O arquivo pode estar corrompido ou protegido.' });
+    }
+
+    if (!conteudo) {
+      return res.status(422).json({ error: 'O PDF não contém texto extraível (pode ser um PDF de imagem).' });
+    }
+
+    const metadados = extrairMetadados(conteudo, req.file.originalname);
+
+    res.json({
+      data: {
+        titulo: metadados.titulo,
+        resumo: metadados.resumo || null,
+        autor: metadados.autor || null,
+        fonte: metadados.fonte || null,
+        conteudo,
+        nome_arquivo: req.file.originalname,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // GET /artigos  — listagem com filtros, busca e paginação
 export const listarArtigos = async (req, res, next) => {
   try {
@@ -24,7 +156,7 @@ export const listarArtigos = async (req, res, next) => {
         usuarios_admin:criado_por (id, nome),
         artigos_categorias (categorias (id, nome)),
         artigos_insumos (insumos_regenerativos (id, nome)),
-        metadados_artigos (cultura_agricola, regiao, tipo_solo, nivel_evidencia, palavras_chave)
+        metadados_artigos (cultura, regiao, tipo_solo, nivel_evidencia, palavras_chave)
       `,
         { count: 'exact' }
       )
@@ -52,7 +184,7 @@ export const listarArtigos = async (req, res, next) => {
     }
     if (cultura) {
       resultado = resultado.filter((a) =>
-        a.metadados_artigos?.cultura_agricola?.toLowerCase().includes(cultura.toLowerCase())
+        a.metadados_artigos?.cultura?.toLowerCase().includes(cultura.toLowerCase())
       );
     }
     if (regiao) {

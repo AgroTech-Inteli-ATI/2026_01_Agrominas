@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './config/env.js';
 import app from './app.js';
 import { supabase } from './config/supabase.js';
 
@@ -18,7 +18,7 @@ async function iniciar() {
     await verificarConexao();
 
     app.listen(PORT, () => {
-      console.log(`🚀 Servidor rodando em http://localhost:${PORT}/api/v1`);
+      console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
       console.log(`📋 Ambiente: ${process.env.NODE_ENV || 'development'}`);
       console.log(`\nRotas disponíveis:`);
       console.log(`  POST   /api/v1/auth/login`);
@@ -36,7 +36,15 @@ async function iniciar() {
       console.log(`  POST   /api/v1/insumos`);
       console.log(`  POST   /api/v1/bot/webhook`);
       console.log(`  POST   /api/v1/bot/buscar`);
+      console.log(`  POST   /api/v1/bot/rag`);
+      console.log(`  POST   /api/v1/bot/contexto`);
       console.log(`  GET    /api/v1/bot/metricas`);
+      console.log(`  GET    /api/v1/admin/perguntas`);
+      console.log(`  POST   /api/v1/admin/perguntas`);
+      console.log(`  PUT    /api/v1/admin/perguntas/:id`);
+      console.log(`  DELETE /api/v1/admin/perguntas/:id`);
+      console.log(`  GET    /api/v1/admin/dashboard/perguntas`);
+      console.log(`  GET    /api/v1/admin/artigos/historico`);
       console.log(`  GET    /api/v1/health`);
     });
   } catch (err) {
