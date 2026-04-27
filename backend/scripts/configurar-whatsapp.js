@@ -14,7 +14,7 @@ const webhookUrl =
   process.env.EVOLUTION_WEBHOOK_URL || 'http://backend:3000/api/v1/bot/webhook';
 const ownerNumber = process.env.WHATSAPP_OWNER_NUMBER || process.env.EVOLUTION_OWNER_NUMBER;
 
-const webhookEvents = ['MESSAGES_UPSERT', 'CONNECTION_UPDATE', 'QRCODE_UPDATED'];
+const webhookEvents = ['MESSAGES_UPSERT'];
 const webhookBase64 = false;
 
 function removeTrailingSlash(value) {
