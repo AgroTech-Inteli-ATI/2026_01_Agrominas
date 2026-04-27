@@ -3,7 +3,12 @@ import "dotenv/config";
 const OPENAI_API_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-5.4";
 
-export async function gerarRespostaComOpenAI({ pergunta, contexto, contextoCientifico }) {
+export async function gerarRespostaComOpenAI({
+  pergunta,
+  contexto,
+  contextoCientifico,
+  tipo = "geral",
+}) {
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
@@ -14,7 +19,7 @@ export async function gerarRespostaComOpenAI({ pergunta, contexto, contextoCient
     };
   }
 
-  const input = montarPrompt(pergunta, contexto, contextoCientifico);
+  const input = montarPrompt(pergunta, contexto, contextoCientifico, tipo);
 
   const response = await fetch(OPENAI_API_URL, {
     method: "POST",
@@ -64,12 +69,69 @@ export async function gerarRespostaComPDF({
     pergunta,
     contexto: textoPDF,
     contextoCientifico,
+    tipo: "laudo_solo",
   });
 }
 
 // ─── Helpers internos ─────────────────────────────────────────────────────────
 
-function montarPrompt(pergunta, contexto, contextoCientifico = null) {
+function montarPrompt(pergunta, contexto, contextoCientifico = null, tipo = "geral") {
+  if (tipo === "laudo_solo") {
+    return montarPromptLaudoSolo(pergunta, contexto, contextoCientifico);
+  }
+
+  return montarPromptGeral(pergunta, contexto, contextoCientifico);
+}
+
+function montarPromptGeral(pergunta, contexto, contextoCientifico = null) {
+  const contextoBase =
+    contexto?.trim() || "Nenhum contexto encontrado na base de conhecimento.";
+  const perguntaProdutor =
+    pergunta?.trim() || "Qual orientacao regenerativa voce recomenda?";
+
+  let blocoCientifico = "";
+  if (contextoCientifico) {
+    blocoCientifico = `
+---
+BASE DE CONHECIMENTO COMPLEMENTAR:
+${contextoCientifico}
+---
+`;
+  }
+
+  return `Voce e um assistente tecnico da Agrominas especializado em agricultura regenerativa.
+
+Responda a pergunta do produtor usando apenas a base de conhecimento fornecida. A resposta deve ser direta, curta e pratica para WhatsApp.
+
+Nao use o formato "Diagnostico" nesta resposta. Esse formato e reservado apenas para analise de laudo de solo/PDF.
+
+---
+BASE DE CONHECIMENTO:
+${contextoBase}
+${blocoCientifico}
+
+PERGUNTA DO PRODUTOR:
+${perguntaProdutor}
+
+---
+
+Responda neste formato:
+
+Orientacao:
+- Explique a recomendacao principal em linguagem simples.
+
+O que fazer agora:
+- Liste de 2 a 4 acoes praticas.
+- Cite insumos, culturas ou tecnicas da base quando forem relevantes.
+
+REGRAS:
+- Nao inventar informacoes fora da base.
+- Nao escrever texto longo.
+- Nao usar linguagem excessivamente tecnica.
+- Nao mencionar "diagnostico do solo" a menos que o usuario tenha enviado um laudo/PDF.`;
+}
+
+function montarPromptLaudoSolo(pergunta, contexto, contextoCientifico = null) {
   const textoAnalise =
     contexto?.trim() || "Nenhuma análise ou documento fornecido.";
   const perguntaProdutor =
@@ -118,9 +180,6 @@ O que fazer agora:
 - Use os nomes dos insumos ou técnicas citados na BASE DE CONHECIMENTO CIENTÍFICO se forem aplicáveis.
 - Foque no que o produtor deve fazer imediatamente
 - Priorize soluções regenerativas e de baixo custo
-
-Quer saber mais?
-- Ofereça aprofundamento em 1 linha (ex: posso detalhar solo, nutrientes, biologia, etc.)
 
 ---
 

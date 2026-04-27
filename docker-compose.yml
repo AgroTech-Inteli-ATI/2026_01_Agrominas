@@ -36,11 +36,20 @@ services:
       # Força a autenticação correta
       - AUTHENTICATION_TYPE=apikey
       - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
+      - LOG_LEVEL=ERROR,WARN
+      - LOG_BAILEYS=error
       # Força a conexão com o Redis sem erro de parsing
       - REDIS_ENABLED=false
       - CACHE_REDIS_ENABLED=true
       - CACHE_REDIS_URI=redis://redis:6379/6
       - CACHE_REDIS_PREFIX_KEY=evolution
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=false
+      - DATABASE_SAVE_MESSAGE_UPDATE=false
+      - DATABASE_SAVE_DATA_CONTACTS=false
+      - DATABASE_SAVE_DATA_CHATS=false
+      - DATABASE_SAVE_DATA_LABELS=false
+      - DATABASE_SAVE_DATA_HISTORIC=false
       - WEBHOOK_GLOBAL_ENABLED=false
       - WEBHOOK_GLOBAL_URL=
       - WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS=false
@@ -62,6 +71,8 @@ services:
       - EVOLUTION_URL=http://evolution:8080
       - EVOLUTION_INSTANCE=${EVOLUTION_INSTANCE:-agrominas}
       - EVOLUTION_WEBHOOK_URL=http://backend:3000/api/v1/bot/webhook
+      - BOT_HISTORY_ENABLED=true
+      - BOT_ALLOWED_NUMBERS=${BOT_ALLOWED_NUMBERS:-}
 
 volumes:
   postgres_data:

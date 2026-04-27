@@ -7,9 +7,16 @@ import {
 import { extrairTextoPDF } from "../services/pdf.service.js";
 import { gerarRespostaComPDF } from "../services/openai.service.js";
 import { enviarMensagem, baixarMidia } from "../services/whatsapp.service.js";
+import {
+  isContatoPermitidoPorEnv,
+  obterContatoBot,
+  registrarMensagemBot,
+  salvarContatoBot,
+} from "../services/bot-history.service.js";
 
 // Cache para evitar processar a mesma mensagem várias vezes (deduplicação)
 const processados = new Set();
+const contatosConhecidos = new Set();
 // Gerenciador de estado simples em memória (em produção, use Redis ou Banco de Dados)
 const sessoes = {};
 
@@ -20,37 +27,56 @@ const MENUS = {
   CULTURA: "CULTURA",
   CULTURA_BUSCA: "CULTURA_BUSCA",
   SOLO: "SOLO",
+  PERGUNTA_ABERTA: "PERGUNTA_ABERTA",
   AGUARDANDO_PDF: "AWAITING_PDF",
   MOSTRAR_FONTES: "MOSTRAR_FONTES",
 };
 
+const MENU_PRINCIPAL_INTERATIVO = `🌱 *Menu Principal | Guia Regenerativo*
+
+Cada escolha no campo ajuda a cuidar melhor do solo, da lavoura e do futuro da produção.
+
+Escolha uma opção:
+
+1️⃣ *Insumos regenerativos*
+Biofertilizantes, compostos, inoculantes e corretivos.
+
+2️⃣ *Cultura / tipo de plantio*
+Recomendações por soja, milho, café, hortaliças e mais.
+
+3️⃣ *Solo e laudo PDF*
+pH, compactação, matéria orgânica e análise de laudo.
+
+4️⃣ *Pergunta aberta*
+Escreva sua dúvida do seu jeito.
+
+5️⃣ *Encerrar atendimento*
+
+💬 Você também pode mandar uma pergunta em texto livre.`;
+
 const MENSAGENS = {
-  BOAS_VINDAS: `Olá! 👋 Bem-vindo ao *Guia Regenerativo* da Agrominas.
+  BOAS_VINDAS: `Olá! 👋 Bem-vindo ao *Guia Regenerativo da Agrominas*.
 
-Sou seu assistente de insumos e manejo sustentável. Estou aqui para te ajudar a encontrar informações técnicas sobre práticas regenerativas de forma simples e rápida.
+Estou aqui para ajudar você a transformar dúvidas do dia a dia em decisões mais seguras para o solo e a lavoura.
 
-Para começar, escolha uma opção abaixo:
+${MENU_PRINCIPAL_INTERATIVO}`,
 
-1️⃣ Insumos Regenerativos Específicos
-2️⃣ Cultura / Tipo de Plantio
-3️⃣ Dúvidas Gerais sobre Solo
-4️⃣ Encerrar atendimento
+  MENU_PRINCIPAL: MENU_PRINCIPAL_INTERATIVO,
 
-👉 Digite o *número* da opção desejada.`,
+  FALLBACK_PRINCIPAL: `Ainda não consegui identificar essa opção. 🤔
 
-  MENU_PRINCIPAL: `1️⃣ Insumos Regenerativos Específicos
-2️⃣ Cultura / Tipo de Plantio
-3️⃣ Dúvidas Gerais sobre Solo
-4️⃣ Encerrar atendimento`,
+${MENU_PRINCIPAL_INTERATIVO}`,
 
-  FALLBACK_PRINCIPAL: `Hmm, não reconheci essa opção. 🤔
+  PERGUNTA_ABERTA: `💬 *Pergunta aberta*
 
-Por favor, digite apenas o *número* correspondente à sua escolha:
+Pode mandar sua dúvida em texto livre.
 
-1️⃣ Insumos Regenerativos Específicos
-2️⃣ Cultura / Tipo de Plantio
-3️⃣ Dúvidas Gerais sobre Solo
-4️⃣ Encerrar atendimento`,
+Exemplos:
+- Qual biofertilizante posso usar no milho?
+- Como melhorar solo compactado?
+- O que fazer quando o pH esta baixo?
+
+0️⃣ Voltar ao Menu Principal`,
 
   SUBMENU_INSUMOS: `Ótimo! Vamos falar sobre *insumos regenerativos*. 🌿
 
@@ -185,6 +211,103 @@ Até mais! 👋`,
 };
 
 // POST /bot/webhook — Entrada oficial da Evolution API (WhatsApp)
+function normalizarTimestampSegundos(timestamp) {
+  if (!timestamp) return null;
+
+  if (typeof timestamp === "number") {
+    return timestamp > 1_000_000_000_000
+      ? Math.floor(timestamp / 1000)
+      : Math.floor(timestamp);
+  }
+
+  if (typeof timestamp === "string") {
+    const parsed = Number(timestamp);
+    return Number.isNaN(parsed) ? null : normalizarTimestampSegundos(parsed);
+  }
+
+  if (typeof timestamp === "object") {
+    return normalizarTimestampSegundos(
+      timestamp.seconds ?? timestamp.low ?? timestamp.value,
+    );
+  }
+
+  return null;
+}
+
+function extrairTextoMensagem(mensagemData) {
+  return (
+    mensagemData?.conversation ||
+    mensagemData?.extendedTextMessage?.text ||
+    mensagemData?.documentWithCaptionMessage?.documentMessage?.caption ||
+    mensagemData?.imageMessage?.caption ||
+    ""
+  );
+}
+
+function isPerguntaLivre(texto) {
+  if (!texto) return false;
+  if (/^\d+$/.test(texto.trim())) return false;
+  return texto.trim().length >= 3;
+}
+
+function isSaudacaoInicial(texto) {
+  return [
+    "oi",
+    "ola",
+    "olá",
+    "bom dia",
+    "boa tarde",
+    "boa noite",
+    "menu",
+    "inicio",
+    "início",
+  ].includes(texto.trim().toLowerCase());
+}
+
+async function responderPerguntaAberta(pergunta, sessao) {
+  const resultadoRAG = await responderRAG(pergunta);
+  sessao.fontes = resultadoRAG.fontes || [];
+
+  if (resultadoRAG.modo === "sem_contexto") {
+    return [
+      "🤔 *Ainda não encontrei uma resposta segura na base da Agrominas para essa pergunta.*",
+      "",
+      "Tente reformular com o nome do insumo, cultura ou prática agrícola.",
+      "",
+      "0️⃣ Voltar ao Menu Principal",
+    ].join("\n");
+  }
+
+  return [
+    "💬 *Pergunta aberta*",
+    "",
+    `*Sua dúvida:* ${pergunta}`,
+    "",
+    resultadoRAG.resposta,
+    "",
+    "9️⃣ Ver fontes",
+    "0️⃣ Voltar ao Menu Principal",
+  ].join("\n");
+}
+
+async function obterContatoConhecido(remoteJid) {
+  if (contatosConhecidos.has(remoteJid)) {
+    return { remote_jid: remoteJid };
+  }
+
+  if (isContatoPermitidoPorEnv(remoteJid)) {
+    contatosConhecidos.add(remoteJid);
+    return { remote_jid: remoteJid };
+  }
+
+  const contato = await obterContatoBot(remoteJid);
+  if (contato) {
+    contatosConhecidos.add(remoteJid);
+  }
+
+  return contato;
+}
+
 export const receberMensagem = async (req, res, next) => {
   const payload = req.body;
   const msgId = payload.data?.key?.id;
@@ -202,7 +325,8 @@ export const receberMensagem = async (req, res, next) => {
     return res.status(200).send("OK");
   }
 
-  const remoteJid = payload.data?.key?.remoteJid;
+  const remoteJid =
+    payload.data?.key?.remoteJidAlt || payload.data?.key?.remoteJid;
   
   if (!remoteJid) {
     return res.status(200).send("Ignorado: Sem JID.");
@@ -213,19 +337,51 @@ export const receberMensagem = async (req, res, next) => {
     return res.status(200).send("Ignorado: Grupo.");
   }
 
+  if (remoteJid === "status@broadcast" || remoteJid.endsWith("@newsletter")) {
+    return res.status(200).send("Ignorado: Broadcast.");
+  }
+
+  const contatoExistente = await obterContatoConhecido(remoteJid);
   // Responde OK imediatamente para a Evolution API não reenviar por timeout
   res.status(200).send("OK");
 
   try {
     const mensagemData = payload.data?.message;
-    const mensagemOriginal =
-      mensagemData?.conversation ||
-      mensagemData?.extendedTextMessage?.text ||
-      mensagemData?.documentWithCaptionMessage?.documentMessage?.caption ||
-      mensagemData?.imageMessage?.caption ||
-      "";
+    const mensagemOriginal = extrairTextoMensagem(mensagemData);
 
     const textoLimpo = mensagemOriginal.trim().toLowerCase();
+    const timestampMensagem = normalizarTimestampSegundos(
+      payload.data?.messageTimestamp,
+    );
+
+    contatosConhecidos.add(remoteJid);
+    await registrarMensagemBot({
+      remoteJid,
+      messageId: msgId,
+      direcao: "entrada",
+      tipo: payload.data?.messageType || "text",
+      texto: mensagemOriginal,
+      timestamp: timestampMensagem,
+      payload: {
+        event: payload.event,
+        instance: payload.instance,
+      },
+    });
+
+    const responder = async (texto) => {
+      await enviarMensagem(remoteJid, texto);
+      await registrarMensagemBot({
+        remoteJid,
+        direcao: "saida",
+        tipo: "text",
+        texto,
+      });
+      await salvarContatoBot({
+        remoteJid,
+        nome: payload.data?.pushName,
+        sessao: sessoes[remoteJid],
+      });
+    };
 
     // Detecção de PDF
     const isDocument = !!(
@@ -237,9 +393,26 @@ export const receberMensagem = async (req, res, next) => {
 
     // 2. Gerenciamento de Sessão / Estado (Usando remoteJid completo como chave)
     if (!sessoes[remoteJid]) {
-      sessoes[remoteJid] = { estado: MENUS.PRINCIPAL, fallbacks: 0, fontes: [] };
-      await enviarMensagem(remoteJid, MENSAGENS.BOAS_VINDAS);
-      return;
+      sessoes[remoteJid] = {
+        estado: contatoExistente?.estado || MENUS.PRINCIPAL,
+        fallbacks: 0,
+        fontes: Array.isArray(contatoExistente?.fontes)
+          ? contatoExistente.fontes
+          : [],
+      };
+
+      if (!contatoExistente) {
+        if (isPerguntaLivre(mensagemOriginal) && !isSaudacaoInicial(textoLimpo)) {
+          sessoes[remoteJid].estado = MENUS.PERGUNTA_ABERTA;
+          await responder(
+            await responderPerguntaAberta(mensagemOriginal, sessoes[remoteJid]),
+          );
+          return;
+        }
+
+        await responder(MENSAGENS.BOAS_VINDAS);
+        return;
+      }
     }
 
     const sessao = sessoes[remoteJid];
@@ -248,8 +421,7 @@ export const receberMensagem = async (req, res, next) => {
     if (["menu", "inicio", "início", "voltar"].includes(textoLimpo)) {
       sessao.estado = MENUS.PRINCIPAL;
       sessao.fallbacks = 0;
-      await enviarMensagem(
-        remoteJid,
+      await responder(
         "Claro! Voltando ao menu principal. 👇\n\n" + MENSAGENS.MENU_PRINCIPAL,
       );
       return;
@@ -261,11 +433,11 @@ export const receberMensagem = async (req, res, next) => {
     if (textoLimpo === "9") {
         if (sessao.fontes && sessao.fontes.length > 0) {
             const listaFontes = sessao.fontes.map((f, i) => `${i + 1}. *${f.titulo}*`).join('\n');
-            await enviarMensagem(remoteJid, `📚 *Fontes utilizadas:* \n\n${listaFontes}\n\n0️⃣ Voltar ao Menu Principal`);
+            await responder(`📚 *Fontes utilizadas:* \n\n${listaFontes}\n\n0️⃣ Voltar ao Menu Principal`);
         } else {
-            await enviarMensagem(remoteJid, "Nenhuma fonte específica foi usada para a última resposta.\n\n0️⃣ Voltar ao Menu Principal");
+            await responder("Nenhuma fonte específica foi usada para a última resposta.\n\n0️⃣ Voltar ao Menu Principal");
         }
-        sessao.estado = MENUS.PRINCIPAL;
+        sessao.estado = MENUS.MOSTRAR_FONTES;
         return;
     }
 
@@ -274,6 +446,10 @@ export const receberMensagem = async (req, res, next) => {
     // --- MENU PRINCIPAL ---
     if (sessao.estado === MENUS.PRINCIPAL) {
       switch (textoLimpo) {
+        case "0":
+          sessao.estado = MENUS.PRINCIPAL;
+          respostaTexto = MENSAGENS.MENU_PRINCIPAL;
+          break;
         case "1":
           sessao.estado = MENUS.INSUMOS;
           respostaTexto = MENSAGENS.SUBMENU_INSUMOS;
@@ -287,10 +463,20 @@ export const receberMensagem = async (req, res, next) => {
           respostaTexto = MENSAGENS.SUBMENU_SOLO;
           break;
         case "4":
+          sessao.estado = MENUS.PERGUNTA_ABERTA;
+          respostaTexto = MENSAGENS.PERGUNTA_ABERTA;
+          break;
+        case "5":
           delete sessoes[remoteJid];
           respostaTexto = MENSAGENS.ENCERRAMENTO;
           break;
         default:
+          if (isPerguntaLivre(mensagemOriginal)) {
+            sessao.estado = MENUS.PERGUNTA_ABERTA;
+            respostaTexto = await responderPerguntaAberta(mensagemOriginal, sessao);
+            break;
+          }
+
           sessao.fallbacks++;
           if (sessao.fallbacks >= 2) {
             respostaTexto = `Parece que está tendo alguma dificuldade. 😊\n\nVocê pode:\n1️⃣ Tentar novamente (vou repetir as opções)\n2️⃣ Falar com um especialista da Agrominas: https://agrominas.com.br/contato`;
@@ -298,6 +484,34 @@ export const receberMensagem = async (req, res, next) => {
           } else {
             respostaTexto = MENSAGENS.FALLBACK_PRINCIPAL;
           }
+      }
+    }
+
+    // --- RETORNO APÓS MOSTRAR FONTES ---
+    else if (sessao.estado === MENUS.MOSTRAR_FONTES) {
+      if (textoLimpo === "0") {
+        sessao.estado = MENUS.PRINCIPAL;
+        respostaTexto = MENSAGENS.MENU_PRINCIPAL;
+      } else if (isPerguntaLivre(mensagemOriginal)) {
+        sessao.estado = MENUS.PERGUNTA_ABERTA;
+        respostaTexto = await responderPerguntaAberta(mensagemOriginal, sessao);
+      } else {
+        sessao.estado = MENUS.PRINCIPAL;
+        respostaTexto =
+          "Tudo certo, voltando ao menu principal. 👇\n\n" +
+          MENSAGENS.MENU_PRINCIPAL;
+      }
+    }
+
+    // --- PERGUNTA ABERTA ---
+    else if (sessao.estado === MENUS.PERGUNTA_ABERTA) {
+      if (textoLimpo === "0") {
+        sessao.estado = MENUS.PRINCIPAL;
+        respostaTexto = MENSAGENS.MENU_PRINCIPAL;
+      } else if (!isPerguntaLivre(mensagemOriginal)) {
+        respostaTexto = MENSAGENS.PERGUNTA_ABERTA;
+      } else {
+        respostaTexto = await responderPerguntaAberta(mensagemOriginal, sessao);
       }
     }
 
@@ -364,7 +578,7 @@ export const receberMensagem = async (req, res, next) => {
           `insumos regenerativos para ${culturasMap[textoLimpo]}`,
         );
         sessao.fontes = resultadoRAG.fontes; // Salva fontes na sessão
-        respostaTexto = `🌱 *Insumos Regenerativos para ${culturasMap[textoLimpo]}*\n\n${resultadoRAG.resposta}\n\n9️⃣ Ver fontes\n1️⃣ Escolher um insumo para aprofundar\n2️⃣ Consultar outra cultura\n0️⃣ Voltar ao Menu Principal`;
+        respostaTexto = `🌱 *Insumos Regenerativos para ${culturasMap[textoLimpo]}*\n\n${resultadoRAG.resposta}\n\n9️⃣ Ver fontes\n0️⃣ Voltar ao Menu Principal`;
       } else if (textoLimpo === "7") {
         sessao.estado = MENUS.CULTURA_BUSCA;
         respostaTexto = MENSAGENS.BUSCA_LIVRE_CULTURA;
@@ -399,7 +613,7 @@ export const receberMensagem = async (req, res, next) => {
           respostaTexto = MENSAGENS.CULTURA_NAO_ENCONTRADA;
         } else {
           sessao.fontes = resultadoRAG.fontes; // Salva fontes na sessão
-          respostaTexto = `🌱 *Recomendações para ${mensagemOriginal}*\n\n${resultadoRAG.resposta}\n\n9️⃣ Ver fontes\n1️⃣ Escolher um insumo para aprofundar\n2️⃣ Consultar outra cultura\n0️⃣ Voltar ao Menu Principal`;
+          respostaTexto = `🌱 *Recomendações para ${mensagemOriginal}*\n\n${resultadoRAG.resposta}\n\n9️⃣ Ver fontes\n0️⃣ Voltar ao Menu Principal`;
           sessao.estado = MENUS.CULTURA;
         }
       }
@@ -440,8 +654,7 @@ export const receberMensagem = async (req, res, next) => {
         if (documentMessage.mimetype !== "application/pdf") {
           respostaTexto = MENSAGENS.FORMATO_INVALIDO;
         } else {
-          await enviarMensagem(
-            remoteJid,
+          await responder(
             "Recebi seu laudo! 🎉\n\nEstou analisando as informações... Isso pode levar alguns segundos. ⏳",
           );
 
@@ -470,8 +683,8 @@ export const receberMensagem = async (req, res, next) => {
             });
 
             sessao.fontes = contextoCientifico.fontes; // Salva fontes na sessão
-            respostaTexto = `📊 *Análise do seu Laudo de Solo*\n\n${resultadoIA.texto}\n\n9️⃣ Ver fontes\n\n⚠️ *Aviso importante:* Estas são recomendações orientativas. Consulte sempre um agrônomo.\n\nDeseja saber mais?\n\n1️⃣ Sim, quero detalhes de um insumo\n2️⃣ Enviar outro laudo\n0️⃣ Voltar ao Menu Principal`;
-            sessao.estado = MENUS.SOLO;
+            respostaTexto = `📊 *Análise do seu Laudo de Solo*\n\n${resultadoIA.texto}\n\n9️⃣ Ver fontes\n\n⚠️ *Aviso importante:* Estas são recomendações orientativas. Consulte sempre um agrônomo.\n\n1️⃣ Enviar outro laudo\n2️⃣ Consultar temas de solo\n0️⃣ Voltar ao Menu Principal`;
+            sessao.estado = MENUS.AGUARDANDO_PDF;
           } catch (error) {
             console.error("[BOT] Erro ao processar PDF:", error);
             respostaTexto =
@@ -496,8 +709,14 @@ export const receberMensagem = async (req, res, next) => {
 
     // 4. Envia a resposta final
     if (respostaTexto) {
-      await enviarMensagem(remoteJid, respostaTexto);
+      await responder(respostaTexto);
     }
+
+    await salvarContatoBot({
+      remoteJid,
+      nome: payload.data?.pushName,
+      sessao,
+    });
 
     console.log(`[BOT] Telefone: ${remoteJid} | Estado: ${sessao.estado}`);
   } catch (err) {
