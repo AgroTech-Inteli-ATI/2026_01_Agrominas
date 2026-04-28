@@ -198,7 +198,7 @@ Selecione o tema da sua dúvida:
 3️⃣ Compactação e Estrutura do Solo
 4️⃣ Matéria Orgânica e Biologia do Solo
 5️⃣ Erosão e Conservação
-6️⃣ Enviar meu Laudo de Solo (PDF) para análise
+6️⃣ Enviar meu Laudo de Solo (PDF ou imagem) para análise
 0️⃣ Voltar ao Menu Principal
 
 👉 Digite o número do tema.`,
@@ -210,7 +210,7 @@ Selecione o tema da sua dúvida:
 3️⃣ Compactação e Estrutura
 4️⃣ Matéria Orgânica e Biologia
 5️⃣ Erosão e Conservação
-6️⃣ Enviar Laudo de Solo (PDF)
+6️⃣ Enviar Laudo de Solo (PDF ou imagem)
 0️⃣ Voltar ao Menu Principal`,
 
   SOLICITAR_PDF: `Ótimo! Você pode enviar o laudo de análise de solo aqui mesmo pelo WhatsApp. 📎
