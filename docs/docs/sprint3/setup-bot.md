@@ -48,14 +48,25 @@ EVOLUTION_API_KEY=SUA_CHAVE_SECRETA_PARA_EVOLUTION_API # Pode ser qualquer strin
 EVOLUTION_INSTANCE=agrominas
 EVOLUTION_WEBHOOK_URL=http://backend:3000/api/v1/bot/webhook
 WHATSAPP_OWNER_NUMBER=55DDDNUMERO
+LOG_LEVEL=ERROR,WARN
+LOG_BAILEYS=error
 
 # Banco interno da Evolution API no Docker
 DATABASE_ENABLED=true
 DATABASE_PROVIDER=postgresql
 DATABASE_CONNECTION_URI=postgresql://evolution:evolution123@postgres:5432/evolution?schema=public
 DATABASE_SAVE_DATA_INSTANCE=true
-DATABASE_SAVE_DATA_NEW_MESSAGE=true
+DATABASE_SAVE_DATA_NEW_MESSAGE=false
+DATABASE_SAVE_MESSAGE_UPDATE=false
+DATABASE_SAVE_DATA_CONTACTS=false
+DATABASE_SAVE_DATA_CHATS=false
+DATABASE_SAVE_DATA_LABELS=false
+DATABASE_SAVE_DATA_HISTORIC=false
 WEBHOOK_GLOBAL_ENABLED=false
+
+# Bot WhatsApp
+BOT_HISTORY_ENABLED=true
+BOT_ALLOWED_NUMBERS=
 ```
 
 ### Passo 3: Configurar o Banco de Dados (Supabase)
@@ -68,6 +79,7 @@ O esquema do banco de dados é gerenciado por arquivos de migração SQL.
     - `001_schema_inicial.sql`
     - `002_unique_titulo.sql`
     - `003_unique_insumos_nome.sql`
+    - `004_bot_whatsapp_historico.sql`
 
 Isso criará as tabelas `artigos`, `categorias`, `insumos_regenerativos` e as tabelas de relacionamento.
 
@@ -82,6 +94,8 @@ O `docker-compose.yml` na raiz do projeto foi configurado para iniciar o backend
 2.  **Aguarde a Inicialização**: O backend estará disponível em `http://localhost:3000` e a Evolution API em `http://localhost:8081`.
 
 ### Passo 5: Conectar o WhatsApp
+
+Use um numero dedicado para o bot sempre que possivel. Ao conectar um WhatsApp pessoal pela Evolution API, a sessao tecnica pode enxergar eventos de outras conversas da conta; o backend filtra o que nao pertence ao bot, mas a separacao real de privacidade vem de usar um numero exclusivo para atendimento.
 
 A Evolution API possui uma interface visual para facilitar o gerenciamento das instâncias.
 
@@ -105,7 +119,7 @@ npm --prefix backend run whatsapp:setup
     - Dentro das configurações da instância no manager, vá na aba "Webhook".
     - Ative o Webhook.
     - Configure a URL para: `http://backend:3000/api/v1/bot/webhook`.
-    - Selecione os eventos `MESSAGES_UPSERT`, `CONNECTION_UPDATE` e `QRCODE_UPDATED`.
+    - Selecione apenas o evento `MESSAGES_UPSERT`.
 
 Pronto! Seu bot está oficialmente conectado e pronto para receber mensagens.
 
