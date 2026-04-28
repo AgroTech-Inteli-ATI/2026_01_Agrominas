@@ -432,8 +432,14 @@ export const receberMensagem = async (req, res, next) => {
     // --- MOSTRAR FONTES (Gatilho Global para quando a opção é exibida) ---
     if (textoLimpo === "9") {
         if (sessao.fontes && sessao.fontes.length > 0) {
-            const listaFontes = sessao.fontes.map((f, i) => `${i + 1}. *${f.titulo}*`).join('\n');
-            await responder(`📚 *Fontes utilizadas:* \n\n${listaFontes}\n\n0️⃣ Voltar ao Menu Principal`);
+            const listaFontes = sessao.fontes.map((f, i) => {
+                if (f.tipo === 'video') {
+                    return `${i + 1}. 🎬 *${f.titulo}*\n   ${f.fonte}`;
+                }
+                return `${i + 1}. 📄 *${f.titulo}*`;
+            }).join('\n\n');
+            await enviarMensagem(remoteJid, `📚 *Fontes utilizadas:* \n\n${listaFontes}\n\n0️⃣ Voltar ao Menu Principal`);
+
         } else {
             await responder("Nenhuma fonte específica foi usada para a última resposta.\n\n0️⃣ Voltar ao Menu Principal");
         }
