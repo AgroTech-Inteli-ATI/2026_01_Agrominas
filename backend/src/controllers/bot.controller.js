@@ -27,7 +27,7 @@ const sessoes = {};
 const timersInatividade = new Map();
 
 // Tempo de inatividade antes de encerrar a sessão (8 minutos)
-const TIMEOUT_INATIVIDADE_MS = 8 * 60 * 1000;
+const TIMEOUT_INATIVIDADE_MS = 1 * 60 * 1000;
 
 /**
  * Reinicia o timer de inatividade para um usuário.
@@ -423,7 +423,7 @@ export const receberMensagem = async (req, res, next) => {
       });
     };
 
-    // ✅ ADICIONAR: Reinicia o timer a cada mensagem recebida
+    // Reinicia o timer a cada mensagem recebida
     reiniciarTimerInatividade(remoteJid, responder);
 
     // Detecção de PDF
