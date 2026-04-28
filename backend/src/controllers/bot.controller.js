@@ -23,6 +23,45 @@ const contatosConhecidos = new Set();
 // Gerenciador de estado simples em memória (em produção, use Redis ou Banco de Dados)
 const sessoes = {};
 
+// Map de timers de inatividade — um por usuário
+const timersInatividade = new Map();
+
+// Tempo de inatividade antes de encerrar a sessão (8 minutos)
+const TIMEOUT_INATIVIDADE_MS = 8 * 60 * 1000;
+
+/**
+ * Reinicia o timer de inatividade para um usuário.
+ * Chamado a cada mensagem recebida.
+ * Quando o timer expira, encerra a sessão e avisa o usuário.
+ */
+function reiniciarTimerInatividade(remoteJid, responderFn) {
+  // Cancela o timer anterior se existir
+  if (timersInatividade.has(remoteJid)) {
+    clearTimeout(timersInatividade.get(remoteJid));
+  }
+
+  const timer = setTimeout(async () => {
+    // Só encerra se ainda tiver sessão ativa
+    if (sessoes[remoteJid]) {
+      console.log(`[BOT] Sessão encerrada por inatividade: ${remoteJid}`);
+      delete sessoes[remoteJid];
+      timersInatividade.delete(remoteJid);
+
+      try {
+        await responderFn(
+          `⏱️ Sua sessão foi encerrada por inatividade.\n\n` +
+          `Faz algum tempo que não recebemos uma mensagem sua. ` +
+          `Se precisar de mais informações, é só mandar uma mensagem aqui e começamos de novo! 🌱`
+        );
+      } catch (err) {
+        console.error('[BOT] Erro ao enviar mensagem de timeout:', err);
+      }
+    }
+  }, TIMEOUT_INATIVIDADE_MS);
+
+  timersInatividade.set(remoteJid, timer);
+}
+
 const MENUS = {
   PRINCIPAL: "PRINCIPAL",
   INSUMOS: "INSUMOS",
@@ -328,7 +367,7 @@ export const receberMensagem = async (req, res, next) => {
 
   const remoteJid =
     payload.data?.key?.remoteJidAlt || payload.data?.key?.remoteJid;
-  
+
   if (!remoteJid) {
     return res.status(200).send("Ignorado: Sem JID.");
   }
@@ -383,6 +422,9 @@ export const receberMensagem = async (req, res, next) => {
         sessao: sessoes[remoteJid],
       });
     };
+
+    // Reinicia o timer a cada mensagem recebida
+    reiniciarTimerInatividade(remoteJid, responder);
 
     // Detecção de PDF
     const isDocument = !!(
@@ -489,11 +531,11 @@ export const receberMensagem = async (req, res, next) => {
             }).join('\n\n');
             await enviarMensagem(remoteJid, `📚 *Fontes utilizadas:* \n\n${listaFontes}\n\n0️⃣ Voltar ao Menu Principal`);
 
-        } else {
-            await responder("Nenhuma fonte específica foi usada para a última resposta.\n\n0️⃣ Voltar ao Menu Principal");
-        }
-        sessao.estado = MENUS.MOSTRAR_FONTES;
-        return;
+      } else {
+        await responder("Nenhuma fonte específica foi usada para a última resposta.\n\n0️⃣ Voltar ao Menu Principal");
+      }
+      sessao.estado = MENUS.MOSTRAR_FONTES;
+      return;
     }
 
     // 3. Lógica da Máquina de Estados
