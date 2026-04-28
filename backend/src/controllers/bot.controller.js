@@ -5,8 +5,10 @@ import {
   obterContextoArtigos,
 } from "../services/rag.service.js";
 import { extrairTextoPDF } from "../services/pdf.service.js";
-import { gerarRespostaComPDF } from "../services/openai.service.js";
-import { transcreverAudio } from '../services/openai.service.js';
+import {
+  gerarRespostaComPDF,
+  transcreverAudio,
+} from "../services/openai.service.js";
 import { enviarMensagem, baixarMidia } from "../services/whatsapp.service.js";
 import {
   isContatoPermitidoPorEnv,
@@ -51,9 +53,7 @@ pH, compactação, matéria orgânica e análise de laudo.
 4️⃣ *Pergunta aberta*
 Escreva sua dúvida do seu jeito.
 
-5️⃣ *Encerrar atendimento*
-
-💬 Você também pode mandar uma pergunta em texto livre.`;
+5️⃣ *Encerrar atendimento*`;
 
 const MENSAGENS = {
   BOAS_VINDAS: `Olá! 👋 Bem-vindo ao *Guia Regenerativo da Agrominas*.
@@ -70,7 +70,7 @@ ${MENU_PRINCIPAL_INTERATIVO}`,
 
   PERGUNTA_ABERTA: `💬 *Pergunta aberta*
 
-Pode mandar sua dúvida em texto livre.
+Pode mandar sua dúvida em texto ou áudio.
 
 Exemplos:
 - Qual biofertilizante posso usar no milho?
@@ -348,9 +348,9 @@ export const receberMensagem = async (req, res, next) => {
 
   try {
     const mensagemData = payload.data?.message;
-    const mensagemOriginal = extrairTextoMensagem(mensagemData);
+    let mensagemOriginal = extrairTextoMensagem(mensagemData);
 
-    const textoLimpo = mensagemOriginal.trim().toLowerCase();
+    let textoLimpo = mensagemOriginal.trim().toLowerCase();
     const timestampMensagem = normalizarTimestampSegundos(
       payload.data?.messageTimestamp,
     );
@@ -396,36 +396,42 @@ export const receberMensagem = async (req, res, next) => {
     const isAudio = !!(mensagemData?.audioMessage);
     const audioMessage = mensagemData?.audioMessage;
 
-    // Processa áudio com Whisper antes de entrar na máquina de estados
-    // Se vier áudio, transcreve e trata como texto normal
+    let mensagemVeioDeAudio = false;
+
+    // Se vier áudio, transcreve e deixa a máquina de estados tratar como
+    // texto da opção 4 (Pergunta aberta).
     if (isAudio && audioMessage) {
       try {
-        await enviarMensagem(remoteJid, '🎙️ Recebi seu áudio! Transcrevendo... um momento.');
+        await responder("🎙️ Recebi seu áudio! Transcrevendo... um momento.");
 
         const audioBuffer = await baixarMidia(payload.data);
-        const mimeType = audioMessage.mimetype || 'audio/ogg; codecs=opus';
+        const mimeType = audioMessage.mimetype || "audio/ogg; codecs=opus";
         const textoTranscrito = await transcreverAudio(audioBuffer, mimeType);
 
         if (!textoTranscrito) {
-          await enviarMensagem(remoteJid, 'Não consegui entender o áudio. 😕 Pode digitar sua dúvida?');
+          await responder(
+            "Não consegui entender o áudio. 😕 Pode digitar sua dúvida?",
+          );
           return;
         }
 
+        mensagemOriginal = textoTranscrito;
+        textoLimpo = mensagemOriginal.trim().toLowerCase();
+        mensagemVeioDeAudio = true;
+
         console.log(`[BOT] Áudio transcrito de ${remoteJid}: "${textoTranscrito}"`);
-
-        // Responde a transcrição confirmando e já usa no RAG
-        await enviarMensagem(remoteJid, `🎙️ *Entendi:* "${textoTranscrito}"\n\nBuscando informações...`);
-
-        const resultadoRAG = await responderRAG(textoTranscrito);
-        sessoes[remoteJid] = sessoes[remoteJid] || { estado: MENUS.PRINCIPAL, fallbacks: 0, fontes: [] };
-        sessoes[remoteJid].fontes = resultadoRAG.fontes;
-
-        const resposta = `${resultadoRAG.resposta}\n\n9️⃣ Ver fontes\n0️⃣ Voltar ao Menu Principal`;
-        await enviarMensagem(remoteJid, resposta);
-        return;
+        await registrarMensagemBot({
+          remoteJid,
+          direcao: "entrada",
+          tipo: "audio_transcription",
+          texto: textoTranscrito,
+          payload: { originalMessageId: msgId },
+        });
       } catch (err) {
-        console.error('[BOT] Erro ao processar áudio:', err);
-        await enviarMensagem(remoteJid, 'Tive um problema ao processar o áudio. 😕 Pode digitar sua pergunta?');
+        console.error("[BOT] Erro ao processar áudio:", err);
+        await responder(
+          "Tive um problema ao processar o áudio. 😕 Pode digitar sua pergunta?",
+        );
         return;
       }
     }
@@ -464,6 +470,10 @@ export const receberMensagem = async (req, res, next) => {
         "Claro! Voltando ao menu principal. 👇\n\n" + MENSAGENS.MENU_PRINCIPAL,
       );
       return;
+    }
+
+    if (mensagemVeioDeAudio && isPerguntaLivre(mensagemOriginal)) {
+      sessao.estado = MENUS.PERGUNTA_ABERTA;
     }
 
     let respostaTexto;
