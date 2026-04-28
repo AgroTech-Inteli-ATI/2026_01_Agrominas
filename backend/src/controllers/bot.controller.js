@@ -6,6 +6,7 @@ import {
 } from "../services/rag.service.js";
 import { extrairTextoPDF } from "../services/pdf.service.js";
 import { gerarRespostaComPDF } from "../services/openai.service.js";
+import { transcreverAudio } from '../services/openai.service.js';
 import { enviarMensagem, baixarMidia } from "../services/whatsapp.service.js";
 import {
   isContatoPermitidoPorEnv,
@@ -391,6 +392,44 @@ export const receberMensagem = async (req, res, next) => {
       mensagemData?.documentMessage ||
       mensagemData?.documentWithCaptionMessage?.documentMessage;
 
+    // Detecção de áudio
+    const isAudio = !!(mensagemData?.audioMessage);
+    const audioMessage = mensagemData?.audioMessage;
+
+    // Processa áudio com Whisper antes de entrar na máquina de estados
+    // Se vier áudio, transcreve e trata como texto normal
+    if (isAudio && audioMessage) {
+      try {
+        await enviarMensagem(remoteJid, '🎙️ Recebi seu áudio! Transcrevendo... um momento.');
+
+        const audioBuffer = await baixarMidia(payload.data);
+        const mimeType = audioMessage.mimetype || 'audio/ogg; codecs=opus';
+        const textoTranscrito = await transcreverAudio(audioBuffer, mimeType);
+
+        if (!textoTranscrito) {
+          await enviarMensagem(remoteJid, 'Não consegui entender o áudio. 😕 Pode digitar sua dúvida?');
+          return;
+        }
+
+        console.log(`[BOT] Áudio transcrito de ${remoteJid}: "${textoTranscrito}"`);
+
+        // Responde a transcrição confirmando e já usa no RAG
+        await enviarMensagem(remoteJid, `🎙️ *Entendi:* "${textoTranscrito}"\n\nBuscando informações...`);
+
+        const resultadoRAG = await responderRAG(textoTranscrito);
+        sessoes[remoteJid] = sessoes[remoteJid] || { estado: MENUS.PRINCIPAL, fallbacks: 0, fontes: [] };
+        sessoes[remoteJid].fontes = resultadoRAG.fontes;
+
+        const resposta = `${resultadoRAG.resposta}\n\n9️⃣ Ver fontes\n0️⃣ Voltar ao Menu Principal`;
+        await enviarMensagem(remoteJid, resposta);
+        return;
+      } catch (err) {
+        console.error('[BOT] Erro ao processar áudio:', err);
+        await enviarMensagem(remoteJid, 'Tive um problema ao processar o áudio. 😕 Pode digitar sua pergunta?');
+        return;
+      }
+    }
+
     // 2. Gerenciamento de Sessão / Estado (Usando remoteJid completo como chave)
     if (!sessoes[remoteJid]) {
       sessoes[remoteJid] = {
@@ -664,7 +703,7 @@ export const receberMensagem = async (req, res, next) => {
 
             // 2. Extrai texto
             const textoPDF = await extrairTextoPDF(pdfBuffer);
-            
+
             if (!textoPDF || textoPDF.trim().length < 10) {
               throw new Error("Não foi possível extrair texto legível do PDF.");
             }
