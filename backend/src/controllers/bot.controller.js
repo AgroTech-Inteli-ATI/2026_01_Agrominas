@@ -5,7 +5,10 @@ import {
   obterContextoArtigos,
 } from "../services/rag.service.js";
 import { extrairTextoPDF } from "../services/pdf.service.js";
-import { gerarRespostaComPDF } from "../services/openai.service.js";
+import {
+  gerarRespostaComPDF,
+  transcreverAudio,
+} from "../services/openai.service.js";
 import { enviarMensagem, baixarMidia } from "../services/whatsapp.service.js";
 import {
   isContatoPermitidoPorEnv,
@@ -50,9 +53,7 @@ pH, compactação, matéria orgânica e análise de laudo.
 4️⃣ *Pergunta aberta*
 Escreva sua dúvida do seu jeito.
 
-5️⃣ *Encerrar atendimento*
-
-💬 Você também pode mandar uma pergunta em texto livre.`;
+5️⃣ *Encerrar atendimento*`;
 
 const MENSAGENS = {
   BOAS_VINDAS: `Olá! 👋 Bem-vindo ao *Guia Regenerativo da Agrominas*.
@@ -69,7 +70,7 @@ ${MENU_PRINCIPAL_INTERATIVO}`,
 
   PERGUNTA_ABERTA: `💬 *Pergunta aberta*
 
-Pode mandar sua dúvida em texto livre.
+Pode mandar sua dúvida em texto ou áudio.
 
 Exemplos:
 - Qual biofertilizante posso usar no milho?
@@ -347,9 +348,9 @@ export const receberMensagem = async (req, res, next) => {
 
   try {
     const mensagemData = payload.data?.message;
-    const mensagemOriginal = extrairTextoMensagem(mensagemData);
+    let mensagemOriginal = extrairTextoMensagem(mensagemData);
 
-    const textoLimpo = mensagemOriginal.trim().toLowerCase();
+    let textoLimpo = mensagemOriginal.trim().toLowerCase();
     const timestampMensagem = normalizarTimestampSegundos(
       payload.data?.messageTimestamp,
     );
@@ -391,6 +392,50 @@ export const receberMensagem = async (req, res, next) => {
       mensagemData?.documentMessage ||
       mensagemData?.documentWithCaptionMessage?.documentMessage;
 
+    // Detecção de áudio
+    const isAudio = !!(mensagemData?.audioMessage);
+    const audioMessage = mensagemData?.audioMessage;
+
+    let mensagemVeioDeAudio = false;
+
+    // Se vier áudio, transcreve e deixa a máquina de estados tratar como
+    // texto da opção 4 (Pergunta aberta).
+    if (isAudio && audioMessage) {
+      try {
+        await responder("🎙️ Recebi seu áudio! Transcrevendo... um momento.");
+
+        const audioBuffer = await baixarMidia(payload.data);
+        const mimeType = audioMessage.mimetype || "audio/ogg; codecs=opus";
+        const textoTranscrito = await transcreverAudio(audioBuffer, mimeType);
+
+        if (!textoTranscrito) {
+          await responder(
+            "Não consegui entender o áudio. 😕 Pode digitar sua dúvida?",
+          );
+          return;
+        }
+
+        mensagemOriginal = textoTranscrito;
+        textoLimpo = mensagemOriginal.trim().toLowerCase();
+        mensagemVeioDeAudio = true;
+
+        console.log(`[BOT] Áudio transcrito de ${remoteJid}: "${textoTranscrito}"`);
+        await registrarMensagemBot({
+          remoteJid,
+          direcao: "entrada",
+          tipo: "audio_transcription",
+          texto: textoTranscrito,
+          payload: { originalMessageId: msgId },
+        });
+      } catch (err) {
+        console.error("[BOT] Erro ao processar áudio:", err);
+        await responder(
+          "Tive um problema ao processar o áudio. 😕 Pode digitar sua pergunta?",
+        );
+        return;
+      }
+    }
+
     // 2. Gerenciamento de Sessão / Estado (Usando remoteJid completo como chave)
     if (!sessoes[remoteJid]) {
       sessoes[remoteJid] = {
@@ -425,6 +470,10 @@ export const receberMensagem = async (req, res, next) => {
         "Claro! Voltando ao menu principal. 👇\n\n" + MENSAGENS.MENU_PRINCIPAL,
       );
       return;
+    }
+
+    if (mensagemVeioDeAudio && isPerguntaLivre(mensagemOriginal)) {
+      sessao.estado = MENUS.PERGUNTA_ABERTA;
     }
 
     let respostaTexto;
@@ -670,7 +719,7 @@ export const receberMensagem = async (req, res, next) => {
 
             // 2. Extrai texto
             const textoPDF = await extrairTextoPDF(pdfBuffer);
-            
+
             if (!textoPDF || textoPDF.trim().length < 10) {
               throw new Error("Não foi possível extrair texto legível do PDF.");
             }

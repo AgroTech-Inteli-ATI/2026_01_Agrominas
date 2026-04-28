@@ -251,3 +251,51 @@ function extrairTextoDoPayload(payload) {
 
   return partes?.join("\n").trim() || "";
 }
+
+/**
+ * Transcreve áudio para texto usando a API Whisper da OpenAI.
+ * Suporta os formatos enviados pelo WhatsApp: ogg/opus, mp4, webm.
+ *
+ * @param {Buffer} audioBuffer - Buffer do arquivo de áudio
+ * @param {string} mimeType - Tipo do arquivo (ex: audio/ogg; codecs=opus)
+ * @returns {Promise<string>} Texto transcrito
+ */
+export async function transcreverAudio(audioBuffer, mimeType = 'audio/ogg') {
+  const apiKey = process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY não configurada.');
+  }
+
+  // Whisper aceita: flac, mp3, mp4, mpeg, mpga, m4a, ogg, wav, webm
+  // WhatsApp envia áudio como ogg/opus — funciona nativamente
+  const extensao = mimeType.includes('ogg') ? 'ogg'
+    : mimeType.includes('mp4') ? 'mp4'
+    : mimeType.includes('webm') ? 'webm'
+    : mimeType.includes('wav') ? 'wav'
+    : 'ogg'; // fallback
+
+  // Whisper exige multipart/form-data com o arquivo
+  const formData = new FormData();
+  const blob = new Blob([audioBuffer], { type: mimeType });
+  formData.append('file', blob, `audio.${extensao}`);
+  formData.append('model', 'whisper-1');
+  formData.append('language', 'pt'); // Português BR
+
+  const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      // NÃO setar Content-Type — o fetch define automaticamente com o boundary do multipart
+    },
+    body: formData,
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data?.error?.message || 'Erro ao transcrever áudio.');
+  }
+
+  return data.text?.trim() || '';
+}
