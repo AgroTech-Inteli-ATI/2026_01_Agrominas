@@ -238,6 +238,7 @@ REGRAS IMPORTANTES:
 - NÃO escrever textos longos
 - NÃO explicar tudo em detalhes por padrão
 - NÃO usar linguagem excessivamente técnica
+- NÃO usar markdown, negrito, asteriscos, ** ou * na resposta
 - Priorizar clareza e ação
 
 Evite respostas genéricas.`;

@@ -304,6 +304,15 @@ function isSaudacaoInicial(texto) {
   ].includes(texto.trim().toLowerCase());
 }
 
+function normalizarRespostaLaudo(texto) {
+  return (texto || "")
+    .replace(/^\s*\*\s+/gm, "- ")
+    .replace(/\*{2,}([^*\n]+)\*{2,}/g, "$1")
+    .replace(/\*([^*\n]+)\*/g, "$1")
+    .replace(/\*/g, "")
+    .trim();
+}
+
 async function responderPerguntaAberta(pergunta, sessao) {
   const resultadoRAG = await responderRAG(pergunta);
   sessao.fontes = resultadoRAG.fontes || [];
@@ -780,7 +789,8 @@ export const receberMensagem = async (req, res, next) => {
             });
 
             sessao.fontes = contextoCientifico.fontes; // Salva fontes na sessão
-            respostaTexto = `📊 *Análise do seu Laudo de Solo*\n\n${resultadoIA.texto}\n\n9️⃣ Ver fontes\n\n⚠️ *Aviso importante:* Estas são recomendações orientativas. Consulte sempre um agrônomo.\n\n1️⃣ Enviar outro laudo\n2️⃣ Consultar temas de solo\n0️⃣ Voltar ao Menu Principal`;
+            const textoLaudo = normalizarRespostaLaudo(resultadoIA.texto);
+            respostaTexto = `📊 *Análise do seu Laudo de Solo*\n\n${textoLaudo}\n\n9️⃣ Ver fontes\n\n⚠️ *Aviso importante:* Estas são recomendações orientativas. Consulte sempre um agrônomo.\n\n1️⃣ Enviar outro laudo\n2️⃣ Consultar temas de solo\n0️⃣ Voltar ao Menu Principal`;
             sessao.estado = MENUS.AGUARDANDO_PDF;
           } catch (error) {
             console.error("[BOT] Erro ao processar PDF:", error);
