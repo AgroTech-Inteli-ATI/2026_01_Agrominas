@@ -485,7 +485,7 @@ export const receberMensagem = async (req, res, next) => {
                 if (f.tipo === 'video') {
                     return `${i + 1}. 🎬 *${f.titulo}*\n   ${f.fonte}`;
                 }
-                return `${i + 1}. 📄 *${f.titulo}*`;
+                return `${i + 1}. 📄 *${f.titulo}*${f.fonte ? `\n   ${f.fonte}` : ''}`;
             }).join('\n\n');
             await enviarMensagem(remoteJid, `📚 *Fontes utilizadas:* \n\n${listaFontes}\n\n0️⃣ Voltar ao Menu Principal`);
 
