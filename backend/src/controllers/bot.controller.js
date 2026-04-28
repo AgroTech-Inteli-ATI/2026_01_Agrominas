@@ -7,6 +7,7 @@ import {
 import { extrairTextoPDF } from "../services/pdf.service.js";
 import {
   gerarRespostaComPDF,
+  gerarRespostaComImagem,
   transcreverAudio,
 } from "../services/openai.service.js";
 import { enviarMensagem, baixarMidia } from "../services/whatsapp.service.js";
@@ -215,11 +216,11 @@ Selecione o tema da sua dúvida:
   SOLICITAR_PDF: `Ótimo! Você pode enviar o laudo de análise de solo aqui mesmo pelo WhatsApp. 📎
 
 *Antes de enviar, confira:*
-✅ O arquivo deve estar no formato *PDF*
+✅ O arquivo pode estar no formato *PDF* ou ser uma *foto/imagem* do laudo
 ✅ Tamanho máximo: *10 MB*
 ✅ Deve ser um laudo de análise de solo (laboratório)
 
-Envie o arquivo agora e aguarde a análise. ⏳`,
+Envie o arquivo ou a foto agora e aguarde a análise. ⏳`,
 
   FORMATO_INVALIDO: `Hmm, esse arquivo não está no formato correto. 🤔
 
@@ -232,13 +233,13 @@ Deseja tentar novamente?
 1️⃣ Sim, vou enviar o PDF
 0️⃣ Voltar ao Menu Principal`,
 
-  NENHUM_ARQUIVO: `Parece que você enviou uma mensagem de texto, mas eu preciso do arquivo PDF do laudo. 📎
+  NENHUM_ARQUIVO: `Parece que você enviou uma mensagem de texto, mas eu preciso do arquivo do laudo. 📎
 
-Para enviar, toque no ícone de anexo 📎 no WhatsApp e selecione o arquivo PDF do seu laudo de solo.
+Para enviar, toque no ícone de anexo 📎 no WhatsApp e selecione o *PDF* ou tire uma *foto* do seu laudo de solo.
 
 Deseja tentar novamente?
 
-1️⃣ Sim, vou anexar o arquivo
+1️⃣ Sim, vou enviar o laudo
 0️⃣ Voltar ao Menu Principal`,
 
   ENCERRAMENTO: `Obrigado por usar o *Guia Regenerativo* da Agrominas! 🌱
@@ -433,6 +434,10 @@ export const receberMensagem = async (req, res, next) => {
     const documentMessage =
       mensagemData?.documentMessage ||
       mensagemData?.documentWithCaptionMessage?.documentMessage;
+
+    // Detecção de imagem
+    const isImage = !!(mensagemData?.imageMessage);
+    const imageMessage = mensagemData?.imageMessage;
 
     // Detecção de áudio
     const isAudio = !!(mensagemData?.audioMessage);
@@ -787,6 +792,36 @@ export const receberMensagem = async (req, res, next) => {
             respostaTexto =
               "Recebi o arquivo, mas não consegui ler as informações com clareza. 😕\n\nIsso pode acontecer quando o laudo está em formato de imagem ou com baixa resolução.\n\n1️⃣ Enviar outro arquivo com melhor qualidade\n2️⃣ Consultar os temas de solo manualmente\n0️⃣ Voltar ao Menu Principal";
           }
+        }
+      } else if (isImage && imageMessage) {
+        await responder(
+          "Recebi a foto do laudo! 🎉\n\nEstou analisando as informações... Isso pode levar alguns segundos. ⏳",
+        );
+
+        try {
+          const imagemBuffer = await baixarMidia(payload.data);
+          const imagemBase64 = imagemBuffer.toString("base64");
+          const mimeType = imageMessage.mimetype || "image/jpeg";
+
+          const contextoCientifico = await obterContextoArtigos(
+            "recomendações para laudo de solo",
+            3,
+          );
+
+          const resultadoIA = await gerarRespostaComImagem({
+            pergunta: "Analise este laudo e dê recomendações regenerativas",
+            imagemBase64,
+            mimeType,
+            contextoCientifico: contextoCientifico.texto,
+          });
+
+          sessao.fontes = contextoCientifico.fontes;
+          respostaTexto = `📊 *Análise do seu Laudo de Solo*\n\n${resultadoIA.texto}\n\n9️⃣ Ver fontes\n\n⚠️ *Aviso importante:* Estas são recomendações orientativas. Consulte sempre um agrônomo.\n\n1️⃣ Enviar outro laudo\n2️⃣ Consultar temas de solo\n0️⃣ Voltar ao Menu Principal`;
+          sessao.estado = MENUS.AGUARDANDO_PDF;
+        } catch (error) {
+          console.error("[BOT] Erro ao processar imagem:", error);
+          respostaTexto =
+            "Recebi a imagem, mas não consegui ler as informações com clareza. 😕\n\nTente enviar o laudo em PDF para melhores resultados.\n\n1️⃣ Enviar arquivo PDF\n2️⃣ Consultar os temas de solo manualmente\n0️⃣ Voltar ao Menu Principal";
         }
       } else if (textoLimpo.length > 0) {
         // Só responde se houver texto real enviado, ignorando eventos vazios
