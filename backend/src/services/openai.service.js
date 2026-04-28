@@ -124,6 +124,86 @@ export async function gerarRespostaComPDF({
   });
 }
 
+export async function gerarRespostaComImagem({
+  pergunta,
+  imagemBase64,
+  mimeType = "image/jpeg",
+  contextoCientifico,
+}) {
+  const apiKey = process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    return {
+      texto: null,
+      modelo: null,
+      modo: "fallback_sem_openai_key",
+    };
+  }
+
+  const systemPrompt = montarPromptLaudoSolo(pergunta, null, contextoCientifico);
+
+  const response = await fetch(OPENAI_API_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: DEFAULT_MODEL,
+      instructions: systemPrompt,
+      input: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: pergunta || "Analise este laudo e dê recomendações regenerativas",
+            },
+            {
+              type: "input_image",
+              image_url: `data:${mimeType};base64,${imagemBase64}`,
+            },
+          ],
+        },
+      ],
+      max_output_tokens: Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || 900),
+    }),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const message = payload?.error?.message || "Erro ao analisar imagem com a OpenAI.";
+
+    if (
+      response.status === 400 &&
+      (message.toLowerCase().includes("image") ||
+        message.toLowerCase().includes("vision") ||
+        message.toLowerCase().includes("multimodal"))
+    ) {
+      console.error(
+        `[OPENAI] ERRO: O modelo "${DEFAULT_MODEL}" não suporta análise de imagem. ` +
+        `Configure OPENAI_MODEL com um modelo de visão (ex: gpt-4o). Detalhe: ${message}`
+      );
+      return {
+        texto: "Desculpe, não consegui analisar a imagem com o modelo atual. Tente enviar o laudo em PDF.",
+        modelo: DEFAULT_MODEL,
+        modo: "erro_modelo_sem_visao",
+      };
+    }
+
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
+  }
+
+  return {
+    texto: payload.output_text || extrairTextoDoPayload(payload),
+    modelo: DEFAULT_MODEL,
+    modo: "openai_vision",
+  };
+}
+
 // ─── Helpers internos ─────────────────────────────────────────────────────────
 
 function montarPrompt(pergunta, contexto, contextoCientifico = null, tipo = "geral") {
