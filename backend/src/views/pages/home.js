@@ -21,13 +21,6 @@ export async function renderHome() {
   const content = `
     <h1 class="page-title">Adicionar Fontes</h1>
     
-    <!-- Barra de Busca -->
-    <div class="search-bar">
-      <input type="text" class="search-bar__input" id="search-input" 
-             placeholder="Pesquisar fontes existentes...">
-      <button class="search-bar__btn" id="btn-search">🔍 Buscar</button>
-    </div>
-    
     <!-- Area de Upload Dropzone -->
     <div class="dropzone" id="dropzone">
       <input type="file" id="file-input" class="dropzone__input" multiple 
@@ -54,6 +47,10 @@ export async function renderHome() {
       <button class="source-btn" id="btn-texto">
         <span class="source-btn__icon">📝</span>
         Texto Copiado
+      </button>
+      <button class="source-btn" id="btn-video">
+        <span class="source-btn__icon">🎬</span>
+        Video
       </button>
     </div>
     
@@ -101,6 +98,7 @@ function setupEventListeners() {
   const btnSite = document.getElementById('btn-site');
   const btnDrive = document.getElementById('btn-drive');
   const btnTexto = document.getElementById('btn-texto');
+  const btnVideo = document.getElementById('btn-video');
   const btnLimpar = document.getElementById('btn-limpar');
   const btnContinuar = document.getElementById('btn-continuar');
 
@@ -136,6 +134,7 @@ function setupEventListeners() {
   btnSite.addEventListener('click', () => abrirModalURL());
   btnDrive.addEventListener('click', () => abrirModalDrive());
   btnTexto.addEventListener('click', () => abrirModalTexto());
+  btnVideo.addEventListener('click', () => abrirModalVideo());
 
   // Configurando busca ao clicar ou pressionar Enter
   btnSearch.addEventListener('click', realizarBusca);
@@ -406,6 +405,54 @@ function abrirModalTexto() {
         });
         atualizarPreviewArquivos();
         closeModal();
+      }
+    });
+  });
+}
+
+// Abrindo modal para adicionar fonte via URL de video
+function abrirModalVideo() {
+  import('../js/utils.js').then(({ openModal, closeModal }) => {
+    const content = `
+      <div class="form-group">
+        <label class="form-label">URL do YouTube</label>
+        <input type="url" id="input-video-url" class="form-input" placeholder="https://www.youtube.com/watch?v=...">
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 8px;">
+          O video sera processado e salvo automaticamente no banco.
+        </p>
+      </div>
+    `;
+
+    const footer = `
+      <button class="btn btn--secondary" id="modal-cancel">Cancelar</button>
+      <button class="btn btn--primary" id="modal-confirm">Processar video</button>
+    `;
+
+    openModal('Adicionar Video do YouTube', content, footer);
+
+    document.getElementById('modal-cancel')?.addEventListener('click', closeModal);
+    document.getElementById('modal-confirm')?.addEventListener('click', async () => {
+      const url = document.getElementById('input-video-url').value.trim();
+
+      if (!url) {
+        showToast('Informe a URL do video.', 'error');
+        return;
+      }
+
+      const btnConfirm = document.getElementById('modal-confirm');
+      btnConfirm.disabled = true;
+      btnConfirm.textContent = 'Processando...';
+
+      try {
+        const response = await api.processarVideo(url);
+        const mensagem = response?.message || 'Video processado com sucesso.';
+        showToast(mensagem, 'success');
+        closeModal();
+        router.navigate('/consulta');
+      } catch (error) {
+        showToast(error.message || 'Erro ao processar video.', 'error');
+        btnConfirm.disabled = false;
+        btnConfirm.textContent = 'Processar video';
       }
     });
   });

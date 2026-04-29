@@ -104,6 +104,47 @@ router.patch(
 
 router.delete('/artigos/:id', authenticate, authorize('admin'), artigosCtrl.deletarArtigo);
 
+// ─── VÍDEOS ─────────────────────────────────────────────────────────────────
+
+router.post(
+  '/videos/processar',
+  authenticate,
+  [body('url').isURL().withMessage('URL inválida.')],
+  validateRequest,
+  artigosCtrl.processarVideo
+);
+
+router.get(
+  '/videos',
+  authenticate,
+  [
+    query('page').optional().isInt({ min: 1 }),
+    query('limit').optional().isInt({ min: 1, max: 100 }),
+    query('status').optional().isIn(['publicado', 'arquivado']),
+  ],
+  validateRequest,
+  artigosCtrl.listarVideos
+);
+
+router.get('/videos/:id', authenticate, artigosCtrl.obterVideo);
+
+router.put(
+  '/videos/:id',
+  authenticate,
+  [
+    param('id').isUUID().withMessage('ID inválido.'),
+    body('titulo').optional().isString().trim().isLength({ min: 3, max: 300 }),
+    body('canal').optional().isString().trim().isLength({ max: 200 }),
+    body('resumo').optional().isString(),
+    body('status').optional().isIn(['publicado', 'arquivado']),
+    body('url_youtube').optional().isURL().withMessage('URL inválida.'),
+  ],
+  validateRequest,
+  artigosCtrl.atualizarVideo
+);
+
+router.delete('/videos/:id', authenticate, authorize('admin'), artigosCtrl.deletarVideo);
+
 // ─── CATEGORIAS ──────────────────────────────────────────────────────────────
 
 router.get('/categorias', authenticate, categoriasCtrl.listarCategorias);

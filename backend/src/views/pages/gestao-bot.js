@@ -34,28 +34,8 @@ export async function renderGestaoBot() {
   const content = `
     <h1 class="page-title">Gestão do Bot</h1>
     <p class="bot-admin__subtitle">
-      Administre as pergunta do bot, acompanhe uso por região e monitore o histórico de artigos.
+      Acompanhe uso por região e monitore o histórico de artigos.
     </p>
-
-    <section class="bot-admin__section">
-      <div class="bot-admin__section-header">
-        <div>
-          <h2 class="bot-admin__section-title">Lista de Perguntas do Bot</h2>
-          <p class="bot-admin__section-text">Visualize e ajuste as opções de perguntas disponíveis no bot.</p>
-        </div>
-        <button class="btn btn--primary" id="bot-btn-nova-pergunta">+ Nova pergunta</button>
-      </div>
-
-      <div class="bot-toolbar">
-        <input class="form-input" id="bot-filter-busca" placeholder="Buscar pergunta..." />
-        </select>
-        <button class="btn btn--secondary" id="bot-btn-filtrar">Filtrar</button>
-        <button class="btn btn--secondary" id="bot-btn-limpar">Limpar</button>
-      </div>
-
-      <div id="bot-perguntas-table" class="bot-table-wrapper"></div>
-      <div id="bot-perguntas-pagination" class="pagination"></div>
-    </section>
 
     <section class="bot-admin__section">
       <div class="bot-admin__section-header">
