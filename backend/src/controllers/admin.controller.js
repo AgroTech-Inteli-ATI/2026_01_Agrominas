@@ -360,11 +360,25 @@ export const obterDashboardPerguntas = async (req, res, next) => {
 
     if (!data || data.length === 0) {
       return res.json({
-        data: construirDashboardMock(periodoDias),
+        data: {
+          periodo_dias: periodoDias,
+          resumo: {
+            total_interacoes: 0,
+            perguntas_distintas: 0,
+            regioes_ativas: 0,
+            taxa_sucesso: 0,
+            respostas_sucesso: 0,
+            respostas_falha: 0,
+          },
+          top_perguntas: [],
+          uso_por_regiao: [],
+          perguntas_por_regiao: {
+            regioes: [],
+            series: [],
+          },
+        },
         meta: {
-          origem: 'mock',
-          aviso:
-            'Sem dados de perguntas no periodo selecionado. Exibindo valores simulados para o dashboard inicial.',
+          origem: 'real',
         },
       });
     }

@@ -2,7 +2,7 @@
 // Permite alternar entre modo real e mock para desenvolvimento
 
 const API_BASE_URL = 'http://localhost:3000/api/v1';
-const MOCK_MODE = true; // Mude para true para usar dados simulados sem backend
+const MOCK_MODE = false; // Mude para true para usar dados simulados sem backend
 
 // Dados simulados para testes sem backend
 const MOCK_DATA = {
@@ -182,8 +182,39 @@ const MOCK_DATA = {
       criada_em: '2026-02-26T10:00:00.000Z',
       atualizada_em: '2026-03-11T11:00:00.000Z'
     }
+  ],
+  videos: [
+    {
+      id: 'v1',
+      titulo: 'Manejo Regenerativo do Solo na Pratica',
+      url_youtube: 'https://www.youtube.com/watch?v=ZlJ5QyEoY2k',
+      youtube_id: 'ZlJ5QyEoY2k',
+      canal: 'Agro Regenerativo Brasil',
+      transcricao: '',
+      resumo: 'Resumo tecnico simulado sobre manejo regenerativo do solo.',
+      status: 'publicado',
+      criado_em: '2026-03-12T10:00:00.000Z'
+    },
+    {
+      id: 'v2',
+      titulo: 'Biofertilizantes e sua aplicacao em cana-de-acucar',
+      url_youtube: 'https://www.youtube.com/watch?v=KqTq2VJx8Xc',
+      youtube_id: 'KqTq2VJx8Xc',
+      canal: 'Canal Agro Tecnico',
+      transcricao: '',
+      resumo: 'Resumo tecnico simulado sobre biofertilizantes na cana.',
+      status: 'arquivado',
+      criado_em: '2026-02-05T10:00:00.000Z'
+    }
   ]
 };
+
+function extrairYoutubeId(url) {
+  const match = String(url || '').match(
+    /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\s]{11})/i
+  );
+  return match ? match[1] : null;
+}
 
 // Classe principal que gerencia todas as requisicoes HTTP
 class ApiService {
@@ -489,6 +520,128 @@ class ApiService {
       return { message: 'Artigo removido com sucesso.' };
     }
     return this.delete(`/artigos/${id}`);
+  }
+
+  // ─── VIDEOS ───────────────────────────────────────────────────────────────
+
+  // Processa URL do YouTube e salva no banco
+  async processarVideo(url) {
+    if (this.mockMode) {
+      await this.mockDelay(800);
+
+      const youtubeId = extrairYoutubeId(url) || String(Date.now());
+      const urlNormalizada = youtubeId
+        ? `https://www.youtube.com/watch?v=${youtubeId}`
+        : url;
+
+      const existente = MOCK_DATA.videos.find((v) => v.youtube_id === youtubeId);
+      if (existente) {
+        return { data: existente, message: 'Vídeo já cadastrado.', meta: { existente: true } };
+      }
+
+      const novoVideo = {
+        id: String(Date.now()),
+        titulo: `Vídeo ${youtubeId}`,
+        url_youtube: urlNormalizada,
+        youtube_id: youtubeId,
+        canal: 'Canal Demo',
+        transcricao: '',
+        resumo: 'Resumo tecnico simulado do video.',
+        status: 'publicado',
+        criado_em: new Date().toISOString(),
+      };
+
+      MOCK_DATA.videos.unshift(novoVideo);
+      return { data: novoVideo, message: 'Vídeo processado com sucesso.' };
+    }
+
+    return this.post('/videos/processar', { url });
+  }
+
+  // Listando videos com filtros e paginacao
+  async listarVideos(params = {}) {
+    if (this.mockMode) {
+      await this.mockDelay();
+
+      let videos = [...MOCK_DATA.videos];
+
+      if (params.busca) {
+        const termo = String(params.busca).toLowerCase();
+        videos = videos.filter(
+          (v) =>
+            v.titulo.toLowerCase().includes(termo) ||
+            (v.canal || '').toLowerCase().includes(termo)
+        );
+      }
+
+      if (params.status) {
+        videos = videos.filter((v) => v.status === params.status);
+      }
+
+      const page = parseInt(params.page) || 1;
+      const limit = parseInt(params.limit) || 10;
+      const total = videos.length;
+      const start = (page - 1) * limit;
+      const paginados = videos.slice(start, start + limit);
+
+      return {
+        data: paginados,
+        meta: { total, page, limit, pages: Math.ceil(total / limit) },
+      };
+    }
+
+    return this.get('/videos', params);
+  }
+
+  // Buscando dados de um video especifico
+  async obterVideo(id) {
+    if (this.mockMode) {
+      await this.mockDelay();
+      const video = MOCK_DATA.videos.find((v) => v.id === id);
+      if (!video) throw new Error('Vídeo não encontrado');
+      return { data: video };
+    }
+    return this.get(`/videos/${id}`);
+  }
+
+  // Atualizando dados de um video existente
+  async atualizarVideo(id, dados) {
+    if (this.mockMode) {
+      await this.mockDelay();
+      const index = MOCK_DATA.videos.findIndex((v) => v.id === id);
+      if (index === -1) throw new Error('Vídeo não encontrado');
+
+      let payload = { ...dados };
+      if (payload.url_youtube) {
+        const videoId = extrairYoutubeId(payload.url_youtube);
+        if (videoId) {
+          payload = {
+            ...payload,
+            url_youtube: `https://www.youtube.com/watch?v=${videoId}`,
+            youtube_id: videoId,
+          };
+        }
+      }
+
+      MOCK_DATA.videos[index] = {
+        ...MOCK_DATA.videos[index],
+        ...payload,
+      };
+      return { data: MOCK_DATA.videos[index], message: 'Vídeo atualizado com sucesso.' };
+    }
+    return this.put(`/videos/${id}`, dados);
+  }
+
+  // Removendo video do cadastro
+  async deletarVideo(id) {
+    if (this.mockMode) {
+      await this.mockDelay();
+      const index = MOCK_DATA.videos.findIndex((v) => v.id === id);
+      if (index === -1) throw new Error('Vídeo não encontrado');
+      MOCK_DATA.videos.splice(index, 1);
+      return { message: 'Vídeo removido com sucesso.' };
+    }
+    return this.delete(`/videos/${id}`);
   }
 
   // ─── CATEGORIAS ─────────────────────────────────────────────────────────────

@@ -1,4 +1,6 @@
+import { YoutubeTranscript } from 'youtube-transcript/dist/youtube-transcript.esm.js';
 import { supabase } from '../config/supabase.js';
+import { resumirTranscricao } from '../services/openai.service.js';
 
 // ─── POLYFILLS exigidos pelo pdfjs-dist em Node.js ───────────────────────────
 if (typeof globalThis.DOMMatrix === 'undefined') {
@@ -91,6 +93,48 @@ function extrairMetadados(texto, nomeArquivo) {
   }
 
   return { titulo, autor, fonte, resumo };
+}
+
+function extrairYoutubeId(url) {
+  const match = String(url || '').match(
+    /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\s]{11})/i
+  );
+  if (!match) throw new Error(`URL inválida ou não reconhecida: "${url}"`);
+  return match[1];
+}
+
+function normalizarUrlYoutube(videoId) {
+  return `https://www.youtube.com/watch?v=${videoId}`;
+}
+
+function limparTextoVideo(texto) {
+  if (!texto) return '';
+  return String(texto)
+    .replace(/\x00/g, '')
+    .replace(/[\x01-\x08\x0B\x0C\x0E-\x1F]/g, '')
+    .trim();
+}
+
+async function obterMetadadosVideo(videoId) {
+  const oEmbedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
+  const response = await fetch(oEmbedUrl);
+
+  if (!response.ok) {
+    return { titulo: `Vídeo ${videoId}`, canal: 'Desconhecido' };
+  }
+
+  const data = await response.json();
+  return { titulo: data.title, canal: data.author_name };
+}
+
+async function obterTranscricaoVideo(videoId) {
+  try {
+    const segmentos = await YoutubeTranscript.fetchTranscript(videoId, { lang: 'pt' });
+    return segmentos.map((s) => s.text).join(' ');
+  } catch {
+    const segmentos = await YoutubeTranscript.fetchTranscript(videoId);
+    return segmentos.map((s) => s.text).join(' ');
+  }
 }
 
 // POST /artigos/processar-pdf  — recebe PDF, extrai texto e retorna metadados sugeridos
@@ -374,6 +418,196 @@ export const alterarStatus = async (req, res, next) => {
 
     if (error) return next(error);
     res.json({ data, message: `Artigo marcado como "${status}".` });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /videos/processar — processa URL do YouTube e salva no banco
+export const processarVideo = async (req, res, next) => {
+  try {
+    const { url } = req.body;
+    if (!url) {
+      return res.status(400).json({ error: 'URL do YouTube é obrigatória.' });
+    }
+
+    let videoId;
+    try {
+      videoId = extrairYoutubeId(url);
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
+
+    const urlNormalizada = normalizarUrlYoutube(videoId);
+
+    const { data: existente, error: existeError } = await supabase
+      .from('videos')
+      .select('id, titulo, url_youtube, youtube_id, canal, resumo, status, criado_em')
+      .eq('youtube_id', videoId)
+      .maybeSingle();
+
+    if (existeError) return next(existeError);
+
+    if (existente) {
+      return res.json({
+        data: existente,
+        message: 'Vídeo já cadastrado.',
+        meta: { existente: true },
+      });
+    }
+
+    const metadados = await obterMetadadosVideo(videoId);
+
+    let transcricao;
+    try {
+      transcricao = await obterTranscricaoVideo(videoId);
+    } catch {
+      return res.status(422).json({ error: 'Não foi possível obter a transcrição do vídeo.' });
+    }
+
+    transcricao = limparTextoVideo(transcricao);
+    if (transcricao.length < 100) {
+      return res.status(422).json({ error: 'Transcrição muito curta ou vazia.' });
+    }
+
+    const resumo = await resumirTranscricao(metadados.titulo, transcricao);
+
+    const { data, error } = await supabase
+      .from('videos')
+      .insert({
+        titulo: metadados.titulo,
+        url_youtube: urlNormalizada,
+        youtube_id: videoId,
+        canal: metadados.canal,
+        transcricao,
+        resumo,
+        status: 'publicado',
+      })
+      .select('id, titulo, url_youtube, youtube_id, canal, resumo, status, criado_em')
+      .single();
+
+    if (error) return next(error);
+
+    res.status(201).json({ data, message: 'Vídeo processado com sucesso.' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /videos — listagem com filtros, busca e paginação
+export const listarVideos = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 10, status, busca } = req.query;
+    const offset = (Number(page) - 1) * Number(limit);
+
+    let query = supabase
+      .from('videos')
+      .select('id, titulo, canal, resumo, url_youtube, status, criado_em', { count: 'exact' })
+      .range(offset, offset + Number(limit) - 1)
+      .order('criado_em', { ascending: false });
+
+    if (status) query = query.eq('status', status);
+    if (busca) {
+      const termo = `%${busca}%`;
+      query = query.or(`titulo.ilike.${termo},canal.ilike.${termo}`);
+    }
+
+    const { data, error, count } = await query;
+    if (error) return next(error);
+
+    res.json({
+      data: data || [],
+      meta: {
+        total: count || 0,
+        page: Number(page),
+        limit: Number(limit),
+        pages: Math.ceil((count || 0) / Number(limit)),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /videos/:id — detalhe completo de um vídeo
+export const obterVideo = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const { data, error } = await supabase
+      .from('videos')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error || !data) {
+      return res.status(404).json({ error: 'Vídeo não encontrado.' });
+    }
+
+    res.json({ data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// PUT /videos/:id — atualização de um vídeo
+export const atualizarVideo = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { titulo, canal, resumo, status, url_youtube } = req.body;
+
+    const campos = {};
+    if (titulo !== undefined) campos.titulo = titulo;
+    if (canal !== undefined) campos.canal = canal;
+    if (resumo !== undefined) campos.resumo = resumo;
+
+    if (status !== undefined) {
+      const statusValidos = ['publicado', 'arquivado'];
+      if (!statusValidos.includes(status)) {
+        return res.status(400).json({ error: `Status inválido. Use: ${statusValidos.join(', ')}.` });
+      }
+      campos.status = status;
+    }
+
+    if (url_youtube !== undefined) {
+      let videoId;
+      try {
+        videoId = extrairYoutubeId(url_youtube);
+      } catch (err) {
+        return res.status(400).json({ error: err.message });
+      }
+      campos.url_youtube = normalizarUrlYoutube(videoId);
+      campos.youtube_id = videoId;
+    }
+
+    if (Object.keys(campos).length === 0) {
+      return res.json({ message: 'Nenhuma alteração enviada.' });
+    }
+
+    const { data, error } = await supabase
+      .from('videos')
+      .update(campos)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) return next(error);
+
+    res.json({ data, message: 'Vídeo atualizado com sucesso.' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// DELETE /videos/:id — exclusão
+export const deletarVideo = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const { error } = await supabase.from('videos').delete().eq('id', id);
+    if (error) return next(error);
+
+    res.json({ message: 'Vídeo removido com sucesso.' });
   } catch (err) {
     next(err);
   }
