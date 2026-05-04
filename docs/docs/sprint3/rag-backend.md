@@ -6,7 +6,26 @@ description: Implementacao do RAG para o bot consultar o banco e gerar respostas
 
 # RAG do Bot
 
-O RAG do bot permite responder perguntas do produtor usando os artigos publicados no banco Supabase como base de conhecimento antes de chamar a OpenAI.
+O RAG do bot permite responder perguntas do produtor usando artigos e videos publicados no Supabase como base de conhecimento antes de chamar a OpenAI.
+
+## O que e RAG
+
+RAG significa **Retrieval-Augmented Generation**, ou geracao aumentada por recuperacao. Na pratica, o sistema primeiro busca informacoes relevantes em uma base confiavel e depois envia esse contexto para a IA gerar a resposta.
+
+No projeto da Agrominas, isso evita que o bot responda apenas com conhecimento generico do modelo. A resposta passa a ser fundamentada nos conteudos cadastrados no banco, como artigos tecnicos, metadados agronomicos, insumos relacionados e resumos de videos.
+
+## O que funciona no projeto
+
+- Perguntas abertas pelo endpoint `POST /api/v1/bot/rag`.
+- Validacao do contexto recuperado pelo endpoint `POST /api/v1/bot/contexto`.
+- Uso do RAG dentro do fluxo do WhatsApp, incluindo perguntas abertas, insumos, culturas e temas de solo.
+- Recuperacao de artigos publicados no Supabase, considerando titulo, resumo, conteudo, categorias, insumos e metadados.
+- Recuperacao de videos publicados, usando titulo e resumo como fonte de conhecimento.
+- Analise de laudos em PDF ou imagem com apoio de contexto cientifico recuperado da base.
+- Retorno das fontes usadas, permitindo mostrar ao usuario quais artigos ou videos fundamentaram a resposta.
+- Fallback quando nao existe `OPENAI_API_KEY`: o backend ainda recupera o contexto, mas nao gera a resposta final pela OpenAI.
+
+Atualmente, a recuperacao e feita por ranking lexical simples, com pontuacao por termos encontrados nos campos do banco. O projeto ainda nao usa embeddings nem banco vetorial.
 
 ## Fluxo
 
@@ -14,13 +33,13 @@ O RAG do bot permite responder perguntas do produtor usando os artigos publicado
 Pergunta do produtor
        |
        v
-POST /api/v1/bot/rag
+POST /api/v1/bot/rag ou fluxo do WhatsApp
        |
        v
-rag.service.js busca artigos publicados no Supabase
+rag.service.js busca artigos e videos publicados no Supabase
        |
        v
-ranking por titulo, resumo, conteudo, categorias, insumos e metadados
+ranking por titulo, resumo, conteudo, categorias, insumos, metadados e videos
        |
        v
 openai.service.js gera resposta usando somente o contexto recuperado
@@ -32,11 +51,28 @@ resposta + fontes usadas
 ## Arquivos principais
 
 ```text
-backend/src/controllers/bot.controller.js   # entrada HTTP do bot
-backend/src/services/rag.service.js         # busca, ranking e montagem do contexto
-backend/src/services/openai.service.js      # chamada para a OpenAI Responses API
-backend/src/routes/index.js                 # rotas /bot/rag e /bot/contexto
+backend/src/services/rag.service.js              # nucleo do RAG: busca, ranking, contexto e fontes
+backend/src/services/openai.service.js           # prompts e chamadas para a OpenAI Responses API
+backend/src/controllers/bot.controller.js        # integra RAG nas rotas HTTP e no fluxo do WhatsApp
+backend/src/routes/index.js                      # declara /bot/rag, /bot/contexto e /bot/pdf
+backend/src/services/pdf.service.js              # extrai texto de laudos PDF usados com contexto RAG
+backend/src/controllers/artigos.controller.js    # processa conteudos que alimentam a base, incluindo videos
+backend/scripts/processar-video.js               # script para transformar videos do YouTube em fontes do RAG
+backend/src/database/migrations/004_videos.sql   # cria a tabela de videos usada como fonte de conhecimento
+backend/scripts/testar_pdf_rag.js                # script de apoio local relacionado ao fluxo PDF/RAG
 ```
+
+### Resumo por arquivo
+
+- `rag.service.js`: consulta artigos e videos publicados, calcula score por aderencia a pergunta, monta o contexto textual e retorna resposta, fontes e itens usados.
+- `openai.service.js`: recebe a pergunta e o contexto recuperado, monta prompts especificos para respostas gerais, laudos PDF/imagem e resumos de video, e chama a OpenAI.
+- `bot.controller.js`: expoe os endpoints do bot, chama o RAG nos menus do WhatsApp e guarda as fontes para a opcao "Ver fontes".
+- `routes/index.js`: configura validacoes e rotas publicas do bot, incluindo RAG, contexto, PDF e webhook.
+- `pdf.service.js`: extrai o texto bruto de PDFs de laudo para que a OpenAI analise o documento junto com contexto tecnico da base.
+- `artigos.controller.js`: ajuda a cadastrar e processar conteudos da base, incluindo PDFs de artigos e videos que depois podem ser recuperados pelo RAG.
+- `processar-video.js`: baixa metadados e transcricao de videos do YouTube, gera resumo tecnico com OpenAI e salva o resultado no Supabase.
+- `004_videos.sql`: define a estrutura da tabela `videos`, com titulo, URL, canal, transcricao, resumo e status.
+- `testar_pdf_rag.js`: registra um teste local do fluxo PDF/RAG e nao faz parte das rotas em producao.
 
 ## O que precisa instalar
 
