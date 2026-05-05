@@ -476,6 +476,8 @@ body {
 .details-panel__value {
   font-size: 1rem;
   color: var(--text-primary);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .details-panel__actions {
@@ -484,6 +486,25 @@ body {
   margin-top: 24px;
   padding-top: 16px;
   border-top: 1px solid var(--border-color);
+}
+
+.video-embed {
+  position: relative;
+  width: 100%;
+  padding-top: 56.25%;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  background: #000000;
+}
+
+.video-embed iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
 }
 
 /* ─── LAYOUT CONSULTA (SPLIT VIEW) ─────────────────────────────────────────── */
@@ -657,6 +678,25 @@ body {
 .form-select:focus {
   outline: none;
   border-color: var(--primary-color);
+}
+
+.form-select[multiple] {
+  min-height: 140px;
+  padding: 6px;
+}
+
+.form-select[multiple] option {
+  padding: 8px 10px;
+}
+
+.form-select[multiple] option:checked {
+  background: var(--primary-color);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.form-select[multiple] option:hover {
+  background: rgba(46, 125, 50, 0.12);
 }
 
 .form-textarea {
@@ -1021,6 +1061,272 @@ body {
   border-color: var(--primary-color);
 }
 
+/* ─── GESTAO DO BOT ───────────────────────────────────────────────────────── */
+.bot-admin__subtitle {
+  color: var(--text-secondary);
+  margin-top: -12px;
+  margin-bottom: 24px;
+}
+
+.bot-admin__section {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.bot-admin__section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.bot-admin__section-title {
+  font-size: 1.25rem;
+  margin-bottom: 4px;
+}
+
+.bot-admin__section-text {
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+}
+
+.bot-toolbar {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr auto auto;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.bot-table-wrapper {
+  overflow-x: auto;
+}
+
+.bot-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.bot-table th,
+.bot-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: top;
+}
+
+.bot-table th {
+  font-size: 0.84rem;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  letter-spacing: 0.4px;
+}
+
+.bot-table__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.bot-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.bot-badge--success {
+  background: rgba(56, 142, 60, 0.15);
+  color: var(--success-color);
+}
+
+.bot-badge--danger {
+  background: rgba(211, 47, 47, 0.15);
+  color: var(--error-color);
+}
+
+.bot-periodo {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.bot-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.bot-kpi-card {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8f9f8 100%);
+}
+
+.bot-kpi-label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.bot-kpi-value {
+  font-size: 1.45rem;
+}
+
+.bot-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.bot-chart-card {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 14px;
+  background: #fafcf9;
+}
+
+.bot-chart-title {
+  margin-bottom: 12px;
+  font-size: 1rem;
+}
+
+.bot-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bot-bar-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bot-bar-row__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.88rem;
+}
+
+.bot-bar {
+  height: 10px;
+  border-radius: 999px;
+  background: #e6efe5;
+  overflow: hidden;
+}
+
+.bot-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2e7d32 0%, #63a868 100%);
+}
+
+.bot-matriz-wrapper {
+  overflow-x: auto;
+}
+
+.bot-matriz-table {
+  width: 100%;
+  min-width: 700px;
+  border-collapse: collapse;
+}
+
+.bot-matriz-table th,
+.bot-matriz-table td {
+  border: 1px solid var(--border-color);
+  padding: 8px;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.bot-matriz-table th {
+  background: #f2f5f1;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.bot-matriz-table__label {
+  text-align: left !important;
+  min-width: 240px;
+  font-weight: 500;
+  background: #fafcf9;
+}
+
+.bot-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bot-timeline__item {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 14px;
+  background: #fcfdfc;
+}
+
+.bot-timeline__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.bot-timeline__tag {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.bot-timeline__tag--criado {
+  color: var(--success-color);
+  background: rgba(56, 142, 60, 0.15);
+}
+
+.bot-timeline__tag--atualizado {
+  color: #1565c0;
+  background: rgba(21, 101, 192, 0.12);
+}
+
+.bot-timeline__date {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.bot-timeline__title {
+  font-size: 1.03rem;
+  margin-bottom: 4px;
+}
+
+.bot-timeline__description {
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.bot-timeline__meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+}
+
 /* ─── RESPONSIVIDADE ───────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .header .container {
@@ -1055,5 +1361,21 @@ body {
   
   .details-panel {
     position: static;
+  }
+
+  .bot-admin__section-header {
+    flex-direction: column;
+  }
+
+  .bot-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .bot-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bot-dashboard-grid {
+    grid-template-columns: 1fr;
   }
 }

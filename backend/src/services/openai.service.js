@@ -1,0 +1,382 @@
+import "dotenv/config";
+
+const OPENAI_API_URL = "https://api.openai.com/v1/responses";
+const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-5.4";
+
+export async function gerarRespostaComOpenAI({
+  pergunta,
+  contexto,
+  contextoCientifico,
+  tipo = "geral",
+}) {
+  const apiKey = process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    return {
+      texto: null,
+      modelo: null,
+      modo: "fallback_sem_openai_key",
+    };
+  }
+
+  const input = montarPrompt(pergunta, contexto, contextoCientifico, tipo);
+
+  const response = await fetch(OPENAI_API_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: DEFAULT_MODEL,
+      input,
+      max_output_tokens: Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || 900),
+    }),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const message =
+      payload?.error?.message || "Erro ao gerar resposta com a OpenAI.";
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
+  }
+
+  return {
+    texto: payload.output_text || extrairTextoDoPayload(payload),
+    modelo: DEFAULT_MODEL,
+    modo: "openai",
+  };
+}
+
+/**
+ * Resume a transcrição de um vídeo do YouTube em conteúdo técnico agrícola.
+ * O resumo é otimizado para uso como fonte de conhecimento no RAG.
+ *
+ * @param {string} titulo - Título do vídeo
+ * @param {string} transcricao - Transcrição completa do vídeo
+ * @returns {Promise<string>} Resumo técnico gerado pela IA
+ */
+export async function resumirTranscricao(titulo, transcricao) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY não configurada no .env');
+
+  const response = await fetch(OPENAI_API_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: DEFAULT_MODEL,
+      input: `Você é um assistente especialista em agricultura regenerativa da Agrominas.
+
+Abaixo está a transcrição de um vídeo educativo intitulado "${titulo}".
+
+Sua tarefa é criar um resumo técnico e objetivo do conteúdo, com foco em:
+- Práticas e técnicas agrícolas mencionadas
+- Insumos regenerativos citados (nomes, benefícios, modo de uso)
+- Culturas e tipos de solo abordados
+- Recomendações práticas para produtores rurais
+
+O resumo será usado como base de conhecimento para responder perguntas de agricultores via WhatsApp, portanto deve ser rico em termos técnicos e nomes específicos de insumos.
+
+TRANSCRIÇÃO:
+${transcricao.slice(0, 12000)}
+
+Escreva o resumo em português, com no máximo 800 palavras, de forma clara e objetiva. Não use introdução — vá direto ao conteúdo técnico.`,
+      max_output_tokens: 1200,
+    }),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = payload?.error?.message || 'Erro ao gerar resumo com OpenAI.';
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
+  }
+
+  return payload.output_text || extrairTextoDoPayload(payload);
+}
+
+/**
+ * Gera resposta da IA usando o texto extraído de um PDF como análise de solo
+ * e opcionalmente contexto científico do banco de dados.
+ *
+ * @param {Object} params
+ * @param {string} params.pergunta - Pergunta do agricultor
+ * @param {string} params.textoPDF - Texto extraído do PDF
+ * @param {string} [params.contextoCientifico] - Contexto recuperado do banco
+ */
+export async function gerarRespostaComPDF({
+  pergunta,
+  textoPDF,
+  contextoCientifico,
+}) {
+  return gerarRespostaComOpenAI({
+    pergunta,
+    contexto: textoPDF,
+    contextoCientifico,
+    tipo: "laudo_solo",
+  });
+}
+
+export async function gerarRespostaComImagem({
+  pergunta,
+  imagemBase64,
+  mimeType = "image/jpeg",
+  contextoCientifico,
+}) {
+  const apiKey = process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    return {
+      texto: null,
+      modelo: null,
+      modo: "fallback_sem_openai_key",
+    };
+  }
+
+  const systemPrompt = montarPromptLaudoSolo(pergunta, null, contextoCientifico);
+
+  const response = await fetch(OPENAI_API_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: DEFAULT_MODEL,
+      instructions: systemPrompt,
+      input: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: pergunta || "Analise este laudo e dê recomendações regenerativas",
+            },
+            {
+              type: "input_image",
+              image_url: `data:${mimeType};base64,${imagemBase64}`,
+            },
+          ],
+        },
+      ],
+      max_output_tokens: Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || 900),
+    }),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const message = payload?.error?.message || "Erro ao analisar imagem com a OpenAI.";
+
+    if (
+      response.status === 400 &&
+      (message.toLowerCase().includes("image") ||
+        message.toLowerCase().includes("vision") ||
+        message.toLowerCase().includes("multimodal"))
+    ) {
+      console.error(
+        `[OPENAI] ERRO: O modelo "${DEFAULT_MODEL}" não suporta análise de imagem. ` +
+        `Configure OPENAI_MODEL com um modelo de visão (ex: gpt-4o). Detalhe: ${message}`
+      );
+      return {
+        texto: "Desculpe, não consegui analisar a imagem com o modelo atual. Tente enviar o laudo em PDF.",
+        modelo: DEFAULT_MODEL,
+        modo: "erro_modelo_sem_visao",
+      };
+    }
+
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
+  }
+
+  return {
+    texto: payload.output_text || extrairTextoDoPayload(payload),
+    modelo: DEFAULT_MODEL,
+    modo: "openai_vision",
+  };
+}
+
+// ─── Helpers internos ─────────────────────────────────────────────────────────
+
+function montarPrompt(pergunta, contexto, contextoCientifico = null, tipo = "geral") {
+  if (tipo === "laudo_solo") {
+    return montarPromptLaudoSolo(pergunta, contexto, contextoCientifico);
+  }
+
+  return montarPromptGeral(pergunta, contexto, contextoCientifico);
+}
+
+function montarPromptGeral(pergunta, contexto, contextoCientifico = null) {
+  const contextoBase =
+    contexto?.trim() || "Nenhum contexto encontrado na base de conhecimento.";
+  const perguntaProdutor =
+    pergunta?.trim() || "Qual orientacao regenerativa voce recomenda?";
+
+  let blocoCientifico = "";
+  if (contextoCientifico) {
+    blocoCientifico = `
+---
+BASE DE CONHECIMENTO COMPLEMENTAR:
+${contextoCientifico}
+---
+`;
+  }
+
+  return `Voce e um assistente tecnico da Agrominas especializado em agricultura regenerativa.
+
+Responda a pergunta do produtor usando apenas a base de conhecimento fornecida. A resposta deve ser direta, curta e pratica para WhatsApp.
+
+Nao use o formato "Diagnostico" nesta resposta. Esse formato e reservado apenas para analise de laudo de solo/PDF.
+
+---
+BASE DE CONHECIMENTO:
+${contextoBase}
+${blocoCientifico}
+
+PERGUNTA DO PRODUTOR:
+${perguntaProdutor}
+
+---
+
+Responda neste formato:
+
+Orientacao:
+- Explique a recomendacao principal em linguagem simples.
+
+O que fazer agora:
+- Liste de 2 a 4 acoes praticas.
+- Cite insumos, culturas ou tecnicas da base quando forem relevantes.
+
+REGRAS:
+- Nao inventar informacoes fora da base.
+- Nao escrever texto longo.
+- Nao usar linguagem excessivamente tecnica.
+- Nao mencionar "diagnostico do solo" a menos que o usuario tenha enviado um laudo/PDF.`;
+}
+
+function montarPromptLaudoSolo(pergunta, contexto, contextoCientifico = null) {
+  const textoAnalise =
+    contexto?.trim() || "Nenhuma análise ou documento fornecido.";
+  const perguntaProdutor =
+    pergunta?.trim() || "O que devo fazer para melhorar meu solo?";
+
+  let blocoCientifico = "";
+  if (contextoCientifico) {
+    blocoCientifico = `
+---
+BASE DE CONHECIMENTO CIENTÍFICO (Artigos Técnicos):
+${contextoCientifico}
+---
+`;
+  }
+
+  return `Você é um engenheiro agrônomo especialista em agricultura regenerativa da Agrominas.
+
+Sua tarefa é analisar os dados do agricultor e fornecer recomendações baseadas em princípios regenerativos e na base de conhecimento científico fornecida.
+
+Responda de forma DIRETA, CURTA e PRÁTICA.
+
+Priorize:
+- saúde do solo
+- aumento de matéria orgânica
+- biologia do solo
+- práticas regenerativas e sustentáveis
+
+---
+DADOS DA ANÁLISE DE SOLO DO AGRICULTOR:
+${textoAnalise}
+${blocoCientifico}
+
+PERGUNTA DO PRODUTOR:
+${perguntaProdutor}
+
+---
+
+Responda OBRIGATORIAMENTE neste formato:
+
+Diagnóstico:
+- Resuma em no máximo 2 linhas a situação do solo (incluindo visão química + biológica)
+- Se houver conflito entre os dados e a ciência, priorize a segurança do solo.
+
+O que fazer agora:
+- Liste ações práticas e diretas (bullet points)
+- Use os nomes dos insumos ou técnicas citados na BASE DE CONHECIMENTO CIENTÍFICO se forem aplicáveis.
+- Foque no que o produtor deve fazer imediatamente
+- Priorize soluções regenerativas e de baixo custo
+
+---
+
+REGRAS IMPORTANTES:
+- NÃO escrever textos longos
+- NÃO explicar tudo em detalhes por padrão
+- NÃO usar linguagem excessivamente técnica
+- NÃO usar markdown, negrito, asteriscos, ** ou * na resposta
+- Priorizar clareza e ação
+
+Evite respostas genéricas.`;
+}
+
+function extrairTextoDoPayload(payload) {
+  const partes = payload.output
+    ?.flatMap((item) => item.content || [])
+    ?.map((content) => content.text)
+    ?.filter(Boolean);
+
+  return partes?.join("\n").trim() || "";
+}
+
+/**
+ * Transcreve áudio para texto usando a API Whisper da OpenAI.
+ * Suporta os formatos enviados pelo WhatsApp: ogg/opus, mp4, webm.
+ *
+ * @param {Buffer} audioBuffer - Buffer do arquivo de áudio
+ * @param {string} mimeType - Tipo do arquivo (ex: audio/ogg; codecs=opus)
+ * @returns {Promise<string>} Texto transcrito
+ */
+export async function transcreverAudio(audioBuffer, mimeType = 'audio/ogg') {
+  const apiKey = process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY não configurada.');
+  }
+
+  // Whisper aceita: flac, mp3, mp4, mpeg, mpga, m4a, ogg, wav, webm
+  // WhatsApp envia áudio como ogg/opus — funciona nativamente
+  const extensao = mimeType.includes('ogg') ? 'ogg'
+    : mimeType.includes('mp4') ? 'mp4'
+    : mimeType.includes('webm') ? 'webm'
+    : mimeType.includes('wav') ? 'wav'
+    : 'ogg'; // fallback
+
+  // Whisper exige multipart/form-data com o arquivo
+  const formData = new FormData();
+  const blob = new Blob([audioBuffer], { type: mimeType });
+  formData.append('file', blob, `audio.${extensao}`);
+  formData.append('model', 'whisper-1');
+  formData.append('language', 'pt'); // Português BR
+
+  const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      // NÃO setar Content-Type — o fetch define automaticamente com o boundary do multipart
+    },
+    body: formData,
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data?.error?.message || 'Erro ao transcrever áudio.');
+  }
+
+  return data.text?.trim() || '';
+}

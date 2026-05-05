@@ -269,7 +269,7 @@ Selecione o tema da sua dúvida:
 3️⃣ Compactação e Estrutura do Solo
 4️⃣ Matéria Orgânica e Biologia do Solo
 5️⃣ Erosão e Conservação
-6️⃣ Enviar meu Laudo de Solo (PDF) para análise
+6️⃣ Enviar meu Laudo de Solo (PDF ou imagem) para análise
 0️⃣ Voltar ao Menu Principal
 
 👉 Digite o número do tema.
